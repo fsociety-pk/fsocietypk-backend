@@ -1,0 +1,123 @@
+import express, { Application, Request, Response, NextFunction } from 'express'
+import cors from 'cors'
+import helmet from 'helmet'
+import morgan from 'morgan'
+import cookieParser from 'cookie-parser'
+import rateLimit from 'express-rate-limit'
+import mongoSanitize from 'express-mongo-sanitize'
+import hpp from 'hpp'
+const xss = require('xss-clean')
+import { env } from './config/env'
+import logger from './utils/logger'
+
+// ── Route imports (added as they are built) ──────────────────────
+import authRoutes from './routes/auth.routes'
+import challengeRoutes from './routes/challenge.routes'
+import userRoutes from './routes/user.routes'
+import adminRoutes from './routes/admin.routes'
+import adminProfileRoutes from './routes/adminProfile.routes'
+import leaderboardRoutes from './routes/leaderboard.routes'
+
+
+const app: Application = express()
+
+// ── Security middleware ───────────────────────────────────────────
+app.use(helmet({
+  crossOriginEmbedderPolicy: false,
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'https:'],
+    },
+  },
+}))
+
+// ── CORS ──────────────────────────────────────────────────────────
+app.use(cors({
+  origin: env.CORS_ORIGIN,
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}))
+
+// ── Rate limiting ────────────────────────────────────────────────
+const globalLimiter = rateLimit({
+  windowMs: env.RATE_LIMIT_WINDOW_MS,
+  max: env.RATE_LIMIT_MAX_REQUESTS,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many requests. Please try again later.' },
+})
+app.use(globalLimiter)
+
+// ── Auth-specific rate limiting ───────────────────────────────────
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 20, // limit each IP to 20 login/signup requests per window
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, message: 'Too many authentication attempts. Please try again after 15 minutes.' },
+})
+
+// ── NoSQL Injection Prevention ────────────────────────────────────
+app.use(mongoSanitize())
+
+// ── XSS Prevention ────────────────────────────────────────────────
+app.use(xss())
+
+// ── HTTP Parameter Pollution ──────────────────────────────────────
+app.use(hpp())
+
+// ── Body parsing ──────────────────────────────────────────────────
+app.use(express.json({ limit: '10mb' }))
+app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+app.use(cookieParser())
+
+// ── HTTP logger ───────────────────────────────────────────────────
+if (env.NODE_ENV !== 'test') {
+  app.use(morgan('combined', {
+    stream: { write: (message: string) => logger.http(message.trim()) },
+  }))
+}
+
+// ── Health check ──────────────────────────────────────────────────
+app.get('/health', (_req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    message: 'FsocietyPK API is operational',
+    timestamp: new Date().toISOString(),
+    environment: env.NODE_ENV,
+  })
+})
+
+// ── API Routes ────────────────────────────────────────────────────
+app.use(`${env.API_PREFIX}/auth`, authLimiter, authRoutes)
+app.use(`${env.API_PREFIX}/challenges`, challengeRoutes)
+app.use(`${env.API_PREFIX}/users`, userRoutes)
+app.use(`${env.API_PREFIX}/admin`, adminRoutes)
+app.use(`${env.API_PREFIX}/admin-profile`, adminProfileRoutes)
+app.use(`${env.API_PREFIX}/leaderboard`, leaderboardRoutes)
+
+
+// ── 404 handler ───────────────────────────────────────────────────
+app.use((_req: Request, res: Response) => {
+  res.status(404).json({ success: false, message: 'Route not found' })
+})
+
+// ── Global error handler ──────────────────────────────────────────
+app.use((err: Error & { statusCode?: number; isOperational?: boolean }, _req: Request, res: Response, _next: NextFunction) => {
+  const statusCode = err.statusCode ?? 500
+  const message = err.isOperational ? err.message : 'Internal Server Error'
+
+  logger.error(`[${statusCode}] ${err.message}`, { stack: err.stack })
+
+  res.status(statusCode).json({
+    success: false,
+    message,
+    ...(env.NODE_ENV === 'development' && { stack: err.stack }),
+  })
+})
+
+export default app
