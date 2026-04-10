@@ -27,11 +27,14 @@ export const errorHandler = (
     message = 'Invalid resource ID'
   }
 
-  // Duplicate key error (e.g. unique email/username)
-  if ((err as NodeJS.ErrnoException).code === '11000') {
+  // Duplicate key error (e.g. unique email/username, title)
+  // Handle both Node errno and MongoDB error codes
+  if ((err as any).code === 11000 || (err as any).code === '11000' || err.message.includes('E11000')) {
     statusCode = 409
     const field = Object.keys((err as any).keyValue ?? {})
-    message = `Duplicate field: ${field.join(', ')} already exists`
+    message = field.length > 0 
+      ? `Duplicate field: ${field.join(', ')} already exists`
+      : 'This resource already exists'
   }
 
   // JWT errors

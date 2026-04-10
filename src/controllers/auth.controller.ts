@@ -6,6 +6,7 @@ import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { env } from '../config/env';
 import { registerSchema, loginSchema } from '../validators/auth.validator';
+import { checkForSQLInjection, getSQLInjectionResponse } from '../utils/sqlInjectionDetector';
 
 // ── Helpers ───────────────────────────────────────────────────────
 
@@ -43,29 +44,45 @@ const sendTokenResponse = (user: any, statusCode: number, res: Response, message
  * @route   POST /api/v1/auth/register
  * @access  Public
  */
-export const register = asyncHandler(async (req: Request, res: Response) => {
+export const register = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   // 1. Validate input
   const result = registerSchema.safeParse(req.body);
   if (!result.success) {
     throw ApiError.badRequest('Invalid registration data', result.error.errors);
   }
 
-  const { username, email, password } = result.data;
+  const { username, password } = result.data;
 
-  // 2. Check if user already exists
-  const existingUser = await User.findOne({ $or: [{ email }, { username }] });
-  if (existingUser) {
-    throw ApiError.conflict('User with this email or username already exists');
+  // 2. Check for SQL injection attempts
+  const sqlInjectionCheck = checkForSQLInjection({ username, password });
+  if (sqlInjectionCheck.detected) {
+    const injectionResponse = getSQLInjectionResponse();
+    res.status(injectionResponse.statusCode).json(
+      new ApiResponse(
+        injectionResponse.statusCode,
+        injectionResponse.message,
+        { 
+          isSQLInjection: true,
+          attemptedField: sqlInjectionCheck.field 
+        }
+      )
+    );
+    return;
   }
 
-  // 3. Create user
+  // 3. Check if user already exists
+  const existingUser = await User.findOne({ username });
+  if (existingUser) {
+    throw ApiError.conflict('Username already exists');
+  }
+
+  // 4. Create user
   const user = await User.create({
     username,
-    email,
     password,
   });
 
-  // 4. Send response
+  // 5. Send response
   sendTokenResponse(user, 201, res, 'User registered successfully');
 });
 
@@ -74,17 +91,34 @@ export const register = asyncHandler(async (req: Request, res: Response) => {
  * @route   POST /api/v1/auth/login
  * @access  Public
  */
-export const login = asyncHandler(async (req: Request, res: Response) => {
+export const login = asyncHandler(async (req: Request, res: Response): Promise<void> => {
   // 1. Validate input
   const result = loginSchema.safeParse(req.body);
   if (!result.success) {
     throw ApiError.badRequest('Invalid login data', result.error.errors);
   }
 
-  const { email, password } = result.data;
+  const { username, password } = result.data;
 
-  // 2. Find user & include password for comparison
-  const user = await User.findOne({ email }).select('+password');
+  // 2. Check for SQL injection attempts
+  const sqlInjectionCheck = checkForSQLInjection({ username, password });
+  if (sqlInjectionCheck.detected) {
+    const injectionResponse = getSQLInjectionResponse();
+    res.status(injectionResponse.statusCode).json(
+      new ApiResponse(
+        injectionResponse.statusCode,
+        injectionResponse.message,
+        { 
+          isSQLInjection: true,
+          attemptedField: sqlInjectionCheck.field 
+        }
+      )
+    );
+    return;
+  }
+
+  // 3. Find user & include password for comparison
+  const user = await User.findOne({ username }).select('+password');
   if (!user) {
     throw ApiError.unauthorized('Invalid credentials');
   }
@@ -93,13 +127,13 @@ export const login = asyncHandler(async (req: Request, res: Response) => {
     throw ApiError.forbidden('Your account has been banned. Access denied.');
   }
 
-  // 3. Check password
+  // 4. Check password
   const isMatch = await user.comparePassword(password);
   if (!isMatch) {
     throw ApiError.unauthorized('Invalid credentials');
   }
 
-  // 4. Send response
+  // 5. Send response
   sendTokenResponse(user, 200, res, 'Login successful');
 });
 

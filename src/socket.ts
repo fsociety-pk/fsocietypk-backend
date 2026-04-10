@@ -15,10 +15,10 @@ export const initSocket = (server: HttpServer) => {
   });
 
   io.on('connection', (socket) => {
-    logger.info(`🔌 User connected: ${socket.id}`);
+    logger.info(`User connected: ${socket.id}`);
 
     socket.on('disconnect', () => {
-      logger.info(`🔌 User disconnected: ${socket.id}`);
+      logger.info(`User disconnected: ${socket.id}`);
     });
   });
 
@@ -35,6 +35,6 @@ export const getIO = () => {
 export const emitLeaderboardUpdate = (data?: any) => {
   if (io) {
     io.emit('leaderboardUpdate', data);
-    logger.debug('📢 Broadcasted leaderboardUpdate event');
+    logger.debug('Broadcasted leaderboardUpdate event');
   }
 };

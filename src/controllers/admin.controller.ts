@@ -5,6 +5,7 @@ import { Submission } from '../models/Submission';
 import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
+import { createNotification, notificationTemplates } from '../utils/notificationHelper';
 
 /**
  * @desc    Get system overview stats
@@ -96,7 +97,7 @@ export const getChallenges = asyncHandler(async (req: Request, res: Response) =>
   if (status) filter.status = status;
 
   const challenges = await Challenge.find(filter)
-    .populate('createdBy', 'username email')
+    .populate('createdBy', 'username')
     .sort({ createdAt: -1 });
 
   // Expose createdBy also as "author" on each doc for legacy front-end code
@@ -125,6 +126,7 @@ export const updateChallengeStatus = asyncHandler(async (req: Request, res: Resp
   const challenge = await Challenge.findById(id);
   if (!challenge) throw ApiError.notFound('Challenge not found');
 
+  const previousStatus = challenge.status;
   challenge.status = status;
 
   // Auto-activate when approved, deactivate otherwise
@@ -138,6 +140,31 @@ export const updateChallengeStatus = asyncHandler(async (req: Request, res: Resp
   }
 
   await challenge.save();
+
+  // Create notification for the challenge creator
+  if (previousStatus !== status) {
+    if (status === 'approved') {
+      const template = notificationTemplates.challengeApproved(challenge.title);
+      await createNotification({
+        userId: challenge.createdBy,
+        title: template.title,
+        message: template.message,
+        type: template.type as any,
+        challengeId: challenge._id,
+        data: { challengeId: challenge._id, status: 'approved' },
+      });
+    } else if (status === 'rejected') {
+      const template = notificationTemplates.challengeRejected(challenge.title, rejectionReason);
+      await createNotification({
+        userId: challenge.createdBy,
+        title: template.title,
+        message: template.message,
+        type: template.type as any,
+        challengeId: challenge._id,
+        data: { challengeId: challenge._id, status: 'rejected', reason: rejectionReason },
+      });
+    }
+  }
 
   res.status(200).json(ApiResponse.ok(`Challenge ${status}`, challenge));
 });

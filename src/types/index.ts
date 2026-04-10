@@ -25,7 +25,6 @@ export type ChallengeStatus = 'pending' | 'approved' | 'rejected'
 export interface IUser {
   _id: string
   username: string
-  email: string
   role: UserRole
   avatar?: string
   bio?: string
@@ -38,6 +37,11 @@ export interface IUser {
 }
 
 // ── Challenge ─────────────────────────────────────────────────────
+export interface IFlag {
+  sequence: number
+  value: string
+}
+
 export interface IChallenge {
   _id: string
   title: string
@@ -46,7 +50,8 @@ export interface IChallenge {
   category: ChallengeCategory
   difficulty: ChallengeDifficulty
   points: number
-  flag: string
+  flag?: string  // Legacy: deprecated, kept for backwards compatibility
+  flags?: IFlag[]  // New: for multi-flag story-based challenges
   hints: IHint[]
   files: IFile[]
   attachments: string[]

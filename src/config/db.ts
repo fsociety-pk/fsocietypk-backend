@@ -14,8 +14,10 @@ export const connectDB = async (): Promise<void> => {
     mongoose.set('strictQuery', true)
 
     const conn = await mongoose.connect(env.MONGODB_URI, {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 10000,
       socketTimeoutMS: 45000,
+      retryWrites: true,
+      w: 'majority',
     })
 
     isConnected = true

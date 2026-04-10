@@ -51,9 +51,21 @@ const challengeSchema = new Schema<IChallengeDocument>(
     },
     flag: {
       type: String,
-      required: [true, 'Flag is required'],
-      select: false, // Never return flag in queries
+      required: false, // Deprecated: kept for backwards compatibility
+      select: false,
     },
+    flags: [
+      {
+        sequence: {
+          type: Number,
+          required: true,
+        },
+        value: {
+          type: String,
+          required: true,
+        },
+      },
+    ],
     hints: [
       {
         content: String,
@@ -135,20 +147,58 @@ challengeSchema.pre('save', function (next) {
   next();
 });
 
-// Pre-save: hash flag with bcrypt if modified
+// Pre-save: hash flags with bcrypt if modified
 challengeSchema.pre('save', async function (next) {
-  if (!this.isModified('flag')) return next();
-  // Only hash if it looks like a plain-text flag (not already a bcrypt hash)
-  if (!this.flag.startsWith('$2')) {
-    const salt = await bcrypt.genSalt(12);
-    this.flag = await bcrypt.hash(this.flag.trim().toLowerCase(), salt);
+  // Handle legacy flag field
+  if (this.isModified('flag') && this.flag) {
+    if (!this.flag.startsWith('$2')) {
+      const salt = await bcrypt.genSalt(12);
+      this.flag = await bcrypt.hash(this.flag.trim().toLowerCase(), salt);
+    }
+  }
+  
+  // Handle new flags array
+  if (this.isModified('flags') && this.flags && this.flags.length > 0) {
+    await Promise.all(
+      this.flags.map(async (flag) => {
+        if (!flag.value.startsWith('$2')) {
+          const salt = await bcrypt.genSalt(12);
+          flag.value = await bcrypt.hash(flag.value.trim().toLowerCase(), salt);
+        }
+      })
+    );
   }
   next();
 });
 
-// Instance method: compare submitted flag against stored hash
-challengeSchema.methods.compareFlag = async function (candidateFlag: string): Promise<boolean> {
-  return bcrypt.compare(candidateFlag.trim().toLowerCase(), this.flag);
+// Instance method: compare submitted flag against stored hash(es)
+// For multiple flags, checks both the legacy single flag and the new flags array
+challengeSchema.methods.compareFlag = async function (candidateFlag: string, sequenceNumber?: number): Promise<boolean> {
+  const normalized = candidateFlag.trim().toLowerCase();
+  
+  // If sequence number provided, check specific flag in array
+  if (sequenceNumber !== undefined && this.flags && this.flags.length > 0) {
+    const flagEntry = this.flags.find((f: any) => f.sequence === sequenceNumber);
+    if (flagEntry) {
+      return bcrypt.compare(normalized, flagEntry.value);
+    }
+    return false;
+  }
+  
+  // Check multiple flags (for story-based challenges)
+  if (this.flags && this.flags.length > 0) {
+    for (const flag of this.flags) {
+      const match = await bcrypt.compare(normalized, flag.value);
+      if (match) return true;
+    }
+  }
+  
+  // Fallback to legacy single flag field
+  if (this.flag) {
+    return bcrypt.compare(normalized, this.flag);
+  }
+  
+  return false;
 };
 
 export const Challenge = mongoose.model<IChallengeDocument>('Challenge', challengeSchema);

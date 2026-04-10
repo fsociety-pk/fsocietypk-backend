@@ -15,7 +15,7 @@ const startServer = async () => {
     // Start HTTP server
     const server = app.listen(PORT, () => {
       logger.info(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
-      logger.info(`  🟢 FsocietyPK API running`)
+      logger.info(`  FsocietyPK API running`)
       logger.info(`  ▸ Environment : ${env.NODE_ENV}`)
       logger.info(`  ▸ Port        : ${PORT}`)
       logger.info(`  ▸ API Prefix  : ${env.API_PREFIX}`)

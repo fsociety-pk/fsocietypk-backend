@@ -4,7 +4,6 @@ import { z } from 'zod';
  * ── Registration Schema ───────────────────────────────────────────
  * Enforces:
  * - min 3 chars for username
- * - valid email
  * - min 8 chars password
  * - at least 1 uppercase, 1 lowercase, 1 number, 1 special character
  */
@@ -13,8 +12,7 @@ export const registerSchema = z.object({
     .string()
     .min(3, 'Username must be at least 3 characters')
     .max(30, 'Username cannot exceed 30 characters')
-    .regex(/^[a-zA-Z0-0_]+$/, 'Username can only contain letters, numbers, and underscores'),
-  email: z.string().email('Please enter a valid email address'),
+    .regex(/^[a-zA-Z0-9_-]+$/, 'Username can only contain letters, numbers, underscores and hyphens'),
   password: z
     .string()
     .min(8, 'Password must be at least 8 characters')
@@ -28,7 +26,7 @@ export const registerSchema = z.object({
  * ── Login Schema ──────────────────────────────────────────────────
  */
 export const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
+  username: z.string().min(1, 'Username is required'),
   password: z.string().min(1, 'Password is required'),
 });
 

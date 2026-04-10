@@ -1,4 +1,4 @@
-import express, { Application, Request, Response, NextFunction } from 'express'
+import express, { Application, Request, Response } from 'express'
 import cors from 'cors'
 import helmet from 'helmet'
 import morgan from 'morgan'
@@ -9,6 +9,7 @@ import hpp from 'hpp'
 const xss = require('xss-clean')
 import { env } from './config/env'
 import logger from './utils/logger'
+import { errorHandler } from './middleware/error.middleware'
 
 // ── Route imports (added as they are built) ──────────────────────
 import authRoutes from './routes/auth.routes'
@@ -17,6 +18,7 @@ import userRoutes from './routes/user.routes'
 import adminRoutes from './routes/admin.routes'
 import adminProfileRoutes from './routes/adminProfile.routes'
 import leaderboardRoutes from './routes/leaderboard.routes'
+import notificationRoutes from './routes/notification.routes'
 
 
 const app: Application = express()
@@ -99,6 +101,7 @@ app.use(`${env.API_PREFIX}/users`, userRoutes)
 app.use(`${env.API_PREFIX}/admin`, adminRoutes)
 app.use(`${env.API_PREFIX}/admin-profile`, adminProfileRoutes)
 app.use(`${env.API_PREFIX}/leaderboard`, leaderboardRoutes)
+app.use(`${env.API_PREFIX}/notifications`, notificationRoutes)
 
 
 // ── 404 handler ───────────────────────────────────────────────────
@@ -107,17 +110,6 @@ app.use((_req: Request, res: Response) => {
 })
 
 // ── Global error handler ──────────────────────────────────────────
-app.use((err: Error & { statusCode?: number; isOperational?: boolean }, _req: Request, res: Response, _next: NextFunction) => {
-  const statusCode = err.statusCode ?? 500
-  const message = err.isOperational ? err.message : 'Internal Server Error'
-
-  logger.error(`[${statusCode}] ${err.message}`, { stack: err.stack })
-
-  res.status(statusCode).json({
-    success: false,
-    message,
-    ...(env.NODE_ENV === 'development' && { stack: err.stack }),
-  })
-})
+app.use(errorHandler)
 
 export default app
