@@ -5,7 +5,7 @@ const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
   HOST: z.string().default('0.0.0.0'),
   PORT: z.coerce.number().default(5000),
-  API_PREFIX: z.string().default('/api'),
+  API_PREFIX: z.string().default('/api/v1'),
 
   // Database
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
