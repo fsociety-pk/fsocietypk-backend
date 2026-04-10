@@ -13,6 +13,8 @@ const envSchema = z.object({
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('7d'),
   JWT_COOKIE_EXPIRES_IN: z.coerce.number().default(7),
+  JWT_COOKIE_SAME_SITE: z.enum(['strict', 'lax', 'none']).default('lax'),
+  JWT_COOKIE_SECURE: z.coerce.boolean().optional(),
 
   // CORS
   CORS_ORIGIN: z.string().default('http://localhost:5173'),

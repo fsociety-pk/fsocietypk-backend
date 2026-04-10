@@ -23,6 +23,8 @@ import notificationRoutes from './routes/notification.routes'
 
 const app: Application = express()
 
+const allowedOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+
 // ── Security middleware ───────────────────────────────────────────
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
@@ -38,7 +40,20 @@ app.use(helmet({
 
 // ── CORS ──────────────────────────────────────────────────────────
 app.use(cors({
-  origin: env.CORS_ORIGIN,
+  origin: (origin, callback) => {
+    // Allow server-to-server and local non-browser requests without Origin header.
+    if (!origin) {
+      callback(null, true)
+      return
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      callback(null, true)
+      return
+    }
+
+    callback(new Error(`CORS blocked for origin: ${origin}`))
+  },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
