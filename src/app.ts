@@ -34,9 +34,7 @@ const normalizePrefix = (prefix: string): string => {
   return withLeadingSlash.replace(/\/+$/, '') || '/api'
 }
 
-const primaryApiPrefix = '/api'
-const configuredApiPrefix = normalizePrefix(env.API_PREFIX)
-const apiPrefixes = Array.from(new Set([primaryApiPrefix, configuredApiPrefix]))
+const apiPrefix = normalizePrefix(env.API_PREFIX)
 
 // ── Security middleware ───────────────────────────────────────────
 app.use(helmet({
@@ -131,27 +129,25 @@ const healthHandler = (_req: Request, res: Response) => {
 app.get('/health', healthHandler)
 
 // ── API Routes ────────────────────────────────────────────────────
-for (const prefix of apiPrefixes) {
-  app.get(prefix, (_req: Request, res: Response) => {
-    res.status(200).json({
-      success: true,
-      message: 'FsocietyPK API root',
-      baseUrl: prefix,
-      modules: ['auth', 'challenges', 'users', 'admin', 'admin-profile', 'leaderboard', 'notifications'],
-      health: `${prefix}/health`,
-    })
+app.get(apiPrefix, (_req: Request, res: Response) => {
+  res.status(200).json({
+    success: true,
+    message: 'FsocietyPK API root',
+    baseUrl: apiPrefix,
+    modules: ['auth', 'challenges', 'users', 'admin', 'admin-profile', 'leaderboard', 'notifications'],
+    health: `${apiPrefix}/health`,
   })
+})
 
-  app.get(`${prefix}/health`, healthHandler)
+app.get(`${apiPrefix}/health`, healthHandler)
 
-  app.use(`${prefix}/auth`, authLimiter, authRoutes)
-  app.use(`${prefix}/challenges`, challengeRoutes)
-  app.use(`${prefix}/users`, userRoutes)
-  app.use(`${prefix}/admin`, adminRoutes)
-  app.use(`${prefix}/admin-profile`, adminProfileRoutes)
-  app.use(`${prefix}/leaderboard`, leaderboardRoutes)
-  app.use(`${prefix}/notifications`, notificationRoutes)
-}
+app.use(`${apiPrefix}/auth`, authLimiter, authRoutes)
+app.use(`${apiPrefix}/challenges`, challengeRoutes)
+app.use(`${apiPrefix}/users`, userRoutes)
+app.use(`${apiPrefix}/admin`, adminRoutes)
+app.use(`${apiPrefix}/admin-profile`, adminProfileRoutes)
+app.use(`${apiPrefix}/leaderboard`, leaderboardRoutes)
+app.use(`${apiPrefix}/notifications`, notificationRoutes)
 
 
 // ── 404 handler ───────────────────────────────────────────────────
