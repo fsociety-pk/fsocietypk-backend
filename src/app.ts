@@ -24,6 +24,7 @@ import notificationRoutes from './routes/notification.routes'
 const app: Application = express()
 
 const allowedOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
+const allowVercelPreviews = env.CORS_ALLOW_VERCEL_PREVIEWS
 
 // ── Security middleware ───────────────────────────────────────────
 app.use(helmet({
@@ -48,6 +49,12 @@ app.use(cors({
     }
 
     if (allowedOrigins.includes(origin)) {
+      callback(null, true)
+      return
+    }
+
+    // Optional compatibility mode for Vercel preview and production domains.
+    if (allowVercelPreviews && origin.endsWith('.vercel.app')) {
       callback(null, true)
       return
     }
@@ -117,6 +124,15 @@ app.use(`${env.API_PREFIX}/admin`, adminRoutes)
 app.use(`${env.API_PREFIX}/admin-profile`, adminProfileRoutes)
 app.use(`${env.API_PREFIX}/leaderboard`, leaderboardRoutes)
 app.use(`${env.API_PREFIX}/notifications`, notificationRoutes)
+
+// Compatibility aliases for deployments where frontend base URL omits API_PREFIX.
+app.use('/auth', authLimiter, authRoutes)
+app.use('/challenges', challengeRoutes)
+app.use('/users', userRoutes)
+app.use('/admin', adminRoutes)
+app.use('/admin-profile', adminProfileRoutes)
+app.use('/leaderboard', leaderboardRoutes)
+app.use('/notifications', notificationRoutes)
 
 
 // ── 404 handler ───────────────────────────────────────────────────
