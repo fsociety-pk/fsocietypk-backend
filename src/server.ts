@@ -6,6 +6,7 @@ import logger from './utils/logger'
 import { initSocket } from './socket'
 
 const PORT = env.PORT
+const HOST = env.HOST
 
 const startServer = async () => {
   try {
@@ -13,10 +14,11 @@ const startServer = async () => {
     await connectDB()
 
     // Start HTTP server
-    const server = app.listen(PORT, () => {
+    const server = app.listen(PORT, HOST, () => {
       logger.info(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)
       logger.info(`  FsocietyPK API running`)
       logger.info(`  ▸ Environment : ${env.NODE_ENV}`)
+      logger.info(`  ▸ Host        : ${HOST}`)
       logger.info(`  ▸ Port        : ${PORT}`)
       logger.info(`  ▸ API Prefix  : ${env.API_PREFIX}`)
       logger.info(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`)

@@ -26,6 +26,18 @@ const app: Application = express()
 const allowedOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
 const allowVercelPreviews = env.CORS_ALLOW_VERCEL_PREVIEWS
 
+const normalizePrefix = (prefix: string): string => {
+  const trimmed = prefix.trim()
+  if (!trimmed) return '/api'
+
+  const withLeadingSlash = trimmed.startsWith('/') ? trimmed : `/${trimmed}`
+  return withLeadingSlash.replace(/\/+$/, '') || '/api'
+}
+
+const primaryApiPrefix = '/api'
+const configuredApiPrefix = normalizePrefix(env.API_PREFIX)
+const apiPrefixes = Array.from(new Set([primaryApiPrefix, configuredApiPrefix]))
+
 // ── Security middleware ───────────────────────────────────────────
 app.use(helmet({
   crossOriginEmbedderPolicy: false,
@@ -107,37 +119,49 @@ if (env.NODE_ENV !== 'test') {
 }
 
 // ── Health check ──────────────────────────────────────────────────
-app.get('/health', (_req: Request, res: Response) => {
+const healthHandler = (_req: Request, res: Response) => {
   res.status(200).json({
     success: true,
     message: 'FsocietyPK API is operational',
     timestamp: new Date().toISOString(),
     environment: env.NODE_ENV,
   })
-})
+}
+
+app.get('/health', healthHandler)
 
 // ── API Routes ────────────────────────────────────────────────────
-app.use(`${env.API_PREFIX}/auth`, authLimiter, authRoutes)
-app.use(`${env.API_PREFIX}/challenges`, challengeRoutes)
-app.use(`${env.API_PREFIX}/users`, userRoutes)
-app.use(`${env.API_PREFIX}/admin`, adminRoutes)
-app.use(`${env.API_PREFIX}/admin-profile`, adminProfileRoutes)
-app.use(`${env.API_PREFIX}/leaderboard`, leaderboardRoutes)
-app.use(`${env.API_PREFIX}/notifications`, notificationRoutes)
+for (const prefix of apiPrefixes) {
+  app.get(prefix, (_req: Request, res: Response) => {
+    res.status(200).json({
+      success: true,
+      message: 'FsocietyPK API root',
+      baseUrl: prefix,
+      modules: ['auth', 'challenges', 'users', 'admin', 'admin-profile', 'leaderboard', 'notifications'],
+      health: `${prefix}/health`,
+    })
+  })
 
-// Compatibility aliases for deployments where frontend base URL omits API_PREFIX.
-app.use('/auth', authLimiter, authRoutes)
-app.use('/challenges', challengeRoutes)
-app.use('/users', userRoutes)
-app.use('/admin', adminRoutes)
-app.use('/admin-profile', adminProfileRoutes)
-app.use('/leaderboard', leaderboardRoutes)
-app.use('/notifications', notificationRoutes)
+  app.get(`${prefix}/health`, healthHandler)
+
+  app.use(`${prefix}/auth`, authLimiter, authRoutes)
+  app.use(`${prefix}/challenges`, challengeRoutes)
+  app.use(`${prefix}/users`, userRoutes)
+  app.use(`${prefix}/admin`, adminRoutes)
+  app.use(`${prefix}/admin-profile`, adminProfileRoutes)
+  app.use(`${prefix}/leaderboard`, leaderboardRoutes)
+  app.use(`${prefix}/notifications`, notificationRoutes)
+}
 
 
 // ── 404 handler ───────────────────────────────────────────────────
-app.use((_req: Request, res: Response) => {
-  res.status(404).json({ success: false, message: 'Route not found' })
+app.use((req: Request, res: Response) => {
+  res.status(404).json({
+    success: false,
+    message: 'Route not found',
+    method: req.method,
+    path: req.originalUrl,
+  })
 })
 
 // ── Global error handler ──────────────────────────────────────────
