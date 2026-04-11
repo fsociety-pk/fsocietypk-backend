@@ -77,8 +77,13 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
     throw ApiError.badRequest('Challenge ID and flag are required');
   }
 
-  if (!FLAG_REGEX.test(String(flag).trim())) {
-    throw ApiError.badRequest('Invalid flag format. Expected: fsociety{...}');
+  const normalizedFlag = String(flag).trim();
+  if (!normalizedFlag) {
+    throw ApiError.badRequest('Flag cannot be empty');
+  }
+
+  if (normalizedFlag.length > 500) {
+    throw ApiError.badRequest('Flag is too long');
   }
 
   // Fetch challenge with flag selected
@@ -112,12 +117,12 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
       return res.status(200).json(ApiResponse.ok('Challenge already solved!', { correct: true }));
     }
 
-    const isCorrect = await challenge.compareFlag(flag, nextFlag.sequence);
+    const isCorrect = await challenge.compareFlag(normalizedFlag, nextFlag.sequence);
 
     await Submission.create({
       userId: req.user!._id,
       challengeId,
-      submittedFlag: flag,
+      submittedFlag: normalizedFlag,
       isCorrect,
       pointsAwarded: 0,
       sequenceNumber: nextFlag.sequence,
@@ -188,12 +193,12 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
     return res.status(200).json(ApiResponse.ok('Challenge already solved!', { correct: true }));
   }
 
-  const isCorrect = await challenge.compareFlag(flag);
+  const isCorrect = await challenge.compareFlag(normalizedFlag);
 
   await Submission.create({
     userId: req.user!._id,
     challengeId,
-    submittedFlag: flag,
+    submittedFlag: normalizedFlag,
     isCorrect,
     pointsAwarded: isCorrect ? challenge.points : 0,
   });
