@@ -9,6 +9,7 @@ import hpp from 'hpp'
 const xss = require('xss-clean')
 import { env } from './config/env'
 import logger from './utils/logger'
+import { isOriginAllowed } from './utils/cors'
 import { errorHandler } from './middleware/error.middleware'
 
 // ── Route imports (added as they are built) ──────────────────────
@@ -22,9 +23,6 @@ import notificationRoutes from './routes/notification.routes'
 
 
 const app: Application = express()
-
-const allowedOrigins = env.CORS_ORIGIN.split(',').map((origin) => origin.trim()).filter(Boolean)
-const allowVercelPreviews = env.CORS_ALLOW_VERCEL_PREVIEWS
 
 const normalizePrefix = (prefix: string): string => {
   const trimmed = prefix.trim()
@@ -52,19 +50,7 @@ app.use(helmet({
 // ── CORS ──────────────────────────────────────────────────────────
 app.use(cors({
   origin: (origin, callback) => {
-    // Allow server-to-server and local non-browser requests without Origin header.
-    if (!origin) {
-      callback(null, true)
-      return
-    }
-
-    if (allowedOrigins.includes(origin)) {
-      callback(null, true)
-      return
-    }
-
-    // Optional compatibility mode for Vercel preview and production domains.
-    if (allowVercelPreviews && origin.endsWith('.vercel.app')) {
+    if (isOriginAllowed(origin)) {
       callback(null, true)
       return
     }

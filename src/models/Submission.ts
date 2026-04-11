@@ -4,6 +4,7 @@ export interface ISubmissionDocument extends Document {
   userId: mongoose.Types.ObjectId;
   challengeId: mongoose.Types.ObjectId;
   submittedFlag: string;
+  sequenceNumber?: number;
   isCorrect: boolean;
   pointsAwarded: number;
   timestamp: Date;
@@ -25,6 +26,11 @@ const submissionSchema = new Schema<ISubmissionDocument>(
       type: String,
       required: [true, 'Submitted flag is required'],
       trim: true,
+    },
+    sequenceNumber: {
+      type: Number,
+      required: false,
+      min: 1,
     },
     isCorrect: {
       type: Boolean,

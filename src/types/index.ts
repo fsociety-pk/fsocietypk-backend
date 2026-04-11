@@ -84,6 +84,7 @@ export interface ISubmission {
   userId: string | IUser
   challengeId: string | IChallenge
   submittedFlag: string
+  sequenceNumber?: number
   isCorrect: boolean
   pointsAwarded: number
   timestamp: string

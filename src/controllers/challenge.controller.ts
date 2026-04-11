@@ -77,13 +77,107 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
     throw ApiError.badRequest('Challenge ID and flag are required');
   }
 
+  if (!FLAG_REGEX.test(String(flag).trim())) {
+    throw ApiError.badRequest('Invalid flag format. Expected: fsociety{...}');
+  }
+
   // Fetch challenge with flag selected
   const challenge = await Challenge.findById(challengeId).select('+flag');
   if (!challenge || !challenge.isActive || challenge.status !== 'approved') {
     throw ApiError.notFound('Challenge not found');
   }
 
-  // Prevent duplicate solve
+  const orderedFlags = Array.isArray(challenge.flags)
+    ? [...challenge.flags].sort((a: any, b: any) => a.sequence - b.sequence)
+    : [];
+
+  // Multi-flag challenge: enforce strict sequence progression.
+  if (orderedFlags.length > 0) {
+    const solvedSteps = await Submission.find({
+      userId: req.user!._id,
+      challengeId,
+      isCorrect: true,
+      sequenceNumber: { $exists: true, $ne: null },
+    }).select('sequenceNumber');
+
+    const solvedSet = new Set(
+      solvedSteps
+        .map((s: any) => s.sequenceNumber)
+        .filter((n: unknown): n is number => typeof n === 'number')
+    );
+
+    const nextFlag = orderedFlags.find((f: any) => !solvedSet.has(f.sequence));
+
+    if (!nextFlag) {
+      return res.status(200).json(ApiResponse.ok('Challenge already solved!', { correct: true }));
+    }
+
+    const isCorrect = await challenge.compareFlag(flag, nextFlag.sequence);
+
+    await Submission.create({
+      userId: req.user!._id,
+      challengeId,
+      submittedFlag: flag,
+      isCorrect,
+      pointsAwarded: 0,
+      sequenceNumber: nextFlag.sequence,
+    });
+
+    if (!isCorrect) {
+      return res.status(200).json(
+        ApiResponse.ok(`Incorrect flag. Submit flag #${nextFlag.sequence}.`, {
+          correct: false,
+          nextSequence: nextFlag.sequence,
+        })
+      );
+    }
+
+    const solvedCountAfterCurrent = solvedSet.size + 1;
+    const isFinalFlag = solvedCountAfterCurrent >= orderedFlags.length;
+
+    if (!isFinalFlag) {
+      const upcoming = orderedFlags.find((f: any) => !solvedSet.has(f.sequence) && f.sequence !== nextFlag.sequence);
+
+      return res.status(200).json(
+        ApiResponse.ok(`Flag #${nextFlag.sequence} correct. Continue to the next flag.`, {
+          correct: true,
+          partial: true,
+          solvedSequence: nextFlag.sequence,
+          nextSequence: upcoming?.sequence,
+        })
+      );
+    }
+
+    await Submission.findOneAndUpdate(
+      {
+        userId: req.user!._id,
+        challengeId,
+        isCorrect: true,
+        sequenceNumber: nextFlag.sequence,
+      },
+      { $set: { pointsAwarded: challenge.points } }
+    );
+
+    await Challenge.findByIdAndUpdate(challengeId, { $inc: { solveCount: 1 } });
+
+    await User.findByIdAndUpdate(req.user!._id, {
+      $inc: { score: challenge.points },
+      $addToSet: { solvedChallenges: challengeId },
+    });
+
+    const { emitLeaderboardUpdate } = await import('../socket');
+    emitLeaderboardUpdate();
+
+    return res.status(200).json(
+      ApiResponse.ok('All flags correct! Points awarded.', {
+        correct: true,
+        points: challenge.points,
+        completed: true,
+      })
+    );
+  }
+
+  // Single-flag challenge: prevent duplicate solve.
   const existingSolve = await Submission.findOne({
     userId: req.user!._id,
     challengeId,
@@ -94,10 +188,8 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
     return res.status(200).json(ApiResponse.ok('Challenge already solved!', { correct: true }));
   }
 
-  // Compare flag (bcrypt compare — inherently case-insensitive after lowercasing)
   const isCorrect = await challenge.compareFlag(flag);
 
-  // Record submission
   await Submission.create({
     userId: req.user!._id,
     challengeId,
@@ -107,16 +199,13 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
   });
 
   if (isCorrect) {
-    // Increment solve count
     await Challenge.findByIdAndUpdate(challengeId, { $inc: { solveCount: 1 } });
 
-    // Award points to user
     await User.findByIdAndUpdate(req.user!._id, {
       $inc: { score: challenge.points },
       $addToSet: { solvedChallenges: challengeId },
     });
 
-    // Real-time leaderboard
     const { emitLeaderboardUpdate } = await import('../socket');
     emitLeaderboardUpdate();
 
@@ -144,21 +233,44 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
     throw ApiError.badRequest('Title, description, category, difficulty, and flag/flags are required');
   }
 
-  // Check if either flag or flags is provided
-  if (!flag && (!flags || flags.length === 0)) {
-    throw ApiError.badRequest('Either flag or flags array is required');
+  const hasSingleFlag = typeof flag === 'string' && flag.trim().length > 0;
+  const hasMultiFlags = Array.isArray(flags) && flags.length > 0;
+
+  if (!hasSingleFlag && !hasMultiFlags) {
+    throw ApiError.badRequest('Either one flag or a non-empty flags array is required');
+  }
+
+  if (hasSingleFlag && hasMultiFlags) {
+    throw ApiError.badRequest('Provide either single flag or flags array, not both');
   }
 
   // Validate flag format for single flag
-  if (flag && !FLAG_REGEX.test(flag.trim())) {
+  if (hasSingleFlag && !FLAG_REGEX.test(flag.trim())) {
     throw ApiError.badRequest('Flag must follow the format: fsociety{...}');
   }
 
   // Validate flag format for multiple flags
-  if (flags && Array.isArray(flags)) {
+  if (hasMultiFlags) {
+    const sequenceSet = new Set<number>();
+
     for (const f of flags) {
+      if (!Number.isInteger(f.sequence) || f.sequence < 1) {
+        throw ApiError.badRequest('Each multi-flag entry must have a sequence number starting from 1');
+      }
+
+      if (sequenceSet.has(f.sequence)) {
+        throw ApiError.badRequest('Duplicate sequence found in flags array');
+      }
+      sequenceSet.add(f.sequence);
+
       if (!f.value || !FLAG_REGEX.test(f.value.trim())) {
         throw ApiError.badRequest(`Each flag must follow the format: fsociety{...}`);
+      }
+    }
+
+    for (let i = 1; i <= flags.length; i++) {
+      if (!sequenceSet.has(i)) {
+        throw ApiError.badRequest('Flag sequences must be continuous in order: 1, 2, 3, ...');
       }
     }
   }
@@ -179,6 +291,8 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
     ? attachments.filter((a: string) => typeof a === 'string' && a.trim()).map((a: string) => a.trim())
     : [];
 
+  const isAdminSubmission = req.user?.role === 'admin';
+
   const challengeData: any = {
     title: title.trim(),
     description: description.trim(),
@@ -186,68 +300,78 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
     difficulty: difficulty.toLowerCase(),
     hints: parsedHints,
     attachments: parsedAttachments,
-    status: 'pending',
-    isActive: false,
+    status: isAdminSubmission ? 'approved' : 'pending',
+    isActive: isAdminSubmission,
     createdBy: req.user!._id,
   };
 
   // Add flag(s)
-  if (flag) {
+  if (hasSingleFlag) {
     challengeData.flag = flag.trim();
   }
-  if (flags && Array.isArray(flags)) {
-    challengeData.flags = flags.map((f: any) => ({
-      sequence: f.sequence || 1,
+  if (hasMultiFlags) {
+    challengeData.flags = [...flags]
+      .sort((a: any, b: any) => a.sequence - b.sequence)
+      .map((f: any) => ({
+      sequence: f.sequence,
       value: f.value.trim(),
     }));
   }
 
   const challenge = await Challenge.create(challengeData);
 
-  // Create notification for user about submission
-  await createNotification({
-    userId: req.user!._id,
-    title: 'Challenge Submitted',
-    message: `Your challenge "${challenge.title}" has been submitted for review. Admins will review it shortly.`,
-    type: 'challenge_submitted',
-    challengeId: challenge._id,
-    data: { challengeId: challenge._id, status: 'pending' },
-  });
+  if (!isAdminSubmission) {
+    // Create notification for user about submission
+    await createNotification({
+      userId: req.user!._id,
+      title: 'Challenge Submitted',
+      message: `Your challenge "${challenge.title}" has been submitted for review. Admins will review it shortly.`,
+      type: 'challenge_submitted',
+      challengeId: challenge._id,
+      data: { challengeId: challenge._id, status: 'pending' },
+    });
 
-  // Notify all active admins so submissions are visible in the admin panel notification center.
-  const admins = await User.find({ role: 'admin', isBanned: false }).select('_id');
-  const submitter = await User.findById(req.user!._id).select('username');
-  const submitterUsername = submitter?.username || 'A user';
-  const adminTemplate = notificationTemplates.challengeSubmissionNotification(submitterUsername, challenge.title);
+    // Notify all active admins so submissions are visible in the admin panel notification center.
+    const admins = await User.find({ role: 'admin', isBanned: false }).select('_id');
+    const submitter = await User.findById(req.user!._id).select('username');
+    const submitterUsername = submitter?.username || 'A user';
+    const adminTemplate = notificationTemplates.challengeSubmissionNotification(submitterUsername, challenge.title);
 
-  await Promise.all(
-    admins
-      .filter((admin) => admin._id.toString() !== req.user!._id.toString())
-      .map((admin) =>
-        createNotification({
-          userId: admin._id,
-          title: adminTemplate.title,
-          message: adminTemplate.message,
-          type: adminTemplate.type as any,
-          challengeId: challenge._id,
-          data: {
+    await Promise.all(
+      admins
+        .filter((admin) => admin._id.toString() !== req.user!._id.toString())
+        .map((admin) =>
+          createNotification({
+            userId: admin._id,
+            title: adminTemplate.title,
+            message: adminTemplate.message,
+            type: adminTemplate.type as any,
             challengeId: challenge._id,
-            status: 'pending',
-            submittedBy: req.user!._id,
-            submittedByUsername: submitterUsername,
-          },
-        })
-      )
-  );
+            data: {
+              challengeId: challenge._id,
+              status: 'pending',
+              submittedBy: req.user!._id,
+              submittedByUsername: submitterUsername,
+            },
+          })
+        )
+    );
+  }
 
   res.status(201).json(
-    ApiResponse.ok('Challenge submitted successfully! Awaiting admin review.', {
+    ApiResponse.ok(
+      isAdminSubmission
+        ? 'Challenge created and published successfully.'
+        : 'Challenge submitted successfully! Awaiting admin review.',
+      {
       _id: challenge._id,
       title: challenge.title,
       status: challenge.status,
+      isActive: challenge.isActive,
       difficulty: challenge.difficulty,
       points: challenge.points,
-    })
+      }
+    )
   );
 });
 

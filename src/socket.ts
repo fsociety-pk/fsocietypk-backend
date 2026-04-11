@@ -1,14 +1,21 @@
 import { Server as SocketServer } from 'socket.io';
 import { Server as HttpServer } from 'http';
 import logger from './utils/logger';
-import { env } from './config/env';
+import { isOriginAllowed } from './utils/cors';
 
 let io: SocketServer;
 
 export const initSocket = (server: HttpServer) => {
   io = new SocketServer(server, {
     cors: {
-      origin: env.CORS_ORIGIN,
+      origin: (origin, callback) => {
+        if (isOriginAllowed(origin)) {
+          callback(null, true);
+          return;
+        }
+
+        callback(new Error(`Socket CORS blocked for origin: ${origin}`));
+      },
       methods: ['GET', 'POST'],
       credentials: true,
     },

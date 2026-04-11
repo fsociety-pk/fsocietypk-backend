@@ -7,7 +7,7 @@ export interface IChallengeDocument
     Document {
   createdBy: mongoose.Types.ObjectId;
   rejectionReason?: string | null;
-  compareFlag(candidateFlag: string): Promise<boolean>;
+  compareFlag(candidateFlag: string, sequenceNumber?: number): Promise<boolean>;
 }
 
 // Points map by difficulty
@@ -185,12 +185,9 @@ challengeSchema.methods.compareFlag = async function (candidateFlag: string, seq
     return false;
   }
   
-  // Check multiple flags (for story-based challenges)
+  // For multi-flag challenges, require sequenceNumber to avoid accepting flags out of order.
   if (this.flags && this.flags.length > 0) {
-    for (const flag of this.flags) {
-      const match = await bcrypt.compare(normalized, flag.value);
-      if (match) return true;
-    }
+    return false;
   }
   
   // Fallback to legacy single flag field
