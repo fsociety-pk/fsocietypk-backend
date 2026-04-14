@@ -20,6 +20,7 @@ import adminRoutes from './routes/admin.routes'
 import adminProfileRoutes from './routes/adminProfile.routes'
 import leaderboardRoutes from './routes/leaderboard.routes'
 import notificationRoutes from './routes/notification.routes'
+import projectRoutes from './routes/project.routes'
 
 
 const app: Application = express()
@@ -120,7 +121,7 @@ app.get(apiPrefix, (_req: Request, res: Response) => {
     success: true,
     message: 'FsocietyPK API root',
     baseUrl: apiPrefix,
-    modules: ['auth', 'challenges', 'users', 'admin', 'admin-profile', 'leaderboard', 'notifications'],
+    modules: ['auth', 'challenges', 'users', 'admin', 'admin-profile', 'leaderboard', 'notifications', 'projects'],
     health: `${apiPrefix}/health`,
   })
 })
@@ -134,6 +135,7 @@ app.use(`${apiPrefix}/admin`, adminRoutes)
 app.use(`${apiPrefix}/admin-profile`, adminProfileRoutes)
 app.use(`${apiPrefix}/leaderboard`, leaderboardRoutes)
 app.use(`${apiPrefix}/notifications`, notificationRoutes)
+app.use(`${apiPrefix}/projects`, projectRoutes)
 
 
 // ── 404 handler ───────────────────────────────────────────────────
