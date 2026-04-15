@@ -2,7 +2,19 @@ import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { IUser } from '../types';
 
-export interface IUserDocument extends Omit<IUser, '_id' | 'createdAt' | 'updatedAt'>, Document {
+export interface IUserDocument extends Document {
+  username: IUser['username'];
+  role: IUser['role'];
+  avatar?: IUser['avatar'];
+  bio?: IUser['bio'];
+  country?: IUser['country'];
+  socialLinks?: IUser['socialLinks'];
+  isProfilePublic?: IUser['isProfilePublic'];
+  score: IUser['score'];
+  solvedChallenges: IUser['solvedChallenges'];
+  isBanned: IUser['isBanned'];
+  createdAt: Date;
+  updatedAt: Date;
   password?: string;
   comparePassword(password: string): Promise<boolean>;
 }
