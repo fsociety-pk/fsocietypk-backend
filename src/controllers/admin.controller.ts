@@ -185,3 +185,29 @@ export const deleteChallenge = asyncHandler(async (req: Request, res: Response) 
 
   res.status(200).json(ApiResponse.ok('Challenge and related data purged', null));
 });
+
+/**
+ * @desc    Update challenge live status (LIVE/ENDED)
+ * @route   PATCH /api/v1/admin/challenges/:id/live-status
+ * @access  Private/Admin
+ */
+export const updateChallengeLiveStatus = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { liveStatus } = req.body;
+
+  if (!['live', 'ended'].includes(liveStatus)) {
+    throw ApiError.badRequest('Invalid live status. Must be: live or ended');
+  }
+
+  const challenge = await Challenge.findById(id);
+  if (!challenge) throw ApiError.notFound('Challenge not found');
+
+  if (challenge.status !== 'approved') {
+    throw ApiError.badRequest('Can only set live status for approved challenges');
+  }
+
+  challenge.liveStatus = liveStatus;
+  await challenge.save();
+
+  res.status(200).json(ApiResponse.ok(`Challenge live status updated to ${liveStatus}`, challenge));
+});

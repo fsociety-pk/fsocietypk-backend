@@ -20,6 +20,7 @@ router.patch('/users/:id/ban', adminController.toggleBan);
 // Challenge Management (review queue)
 router.get('/challenges', adminController.getChallenges);
 router.patch('/challenges/:id/status', adminController.updateChallengeStatus);
+router.patch('/challenges/:id/live-status', adminController.updateChallengeLiveStatus);
 router.delete('/challenges/:id', adminController.deleteChallenge);
 
 export default router;

@@ -21,7 +21,15 @@ export type SubmissionStatus = 'correct' | 'incorrect'
 
 export type ChallengeStatus = 'pending' | 'approved' | 'rejected'
 
+export type ChallengeLiveStatus = 'live' | 'ended'
+
 // ── User ──────────────────────────────────────────────────────────
+export interface ISocialLinks {
+  linkedin?: string
+  github?: string
+  instagram?: string
+}
+
 export interface IUser {
   _id: string
   username: string
@@ -29,6 +37,8 @@ export interface IUser {
   avatar?: string
   bio?: string
   country?: string
+  socialLinks?: ISocialLinks
+  isProfilePublic?: boolean
   score: number
   solvedChallenges: string[]
   isBanned: boolean
@@ -58,6 +68,7 @@ export interface IChallenge {
   solveCount: number
   isActive: boolean
   status: ChallengeStatus
+  liveStatus?: ChallengeLiveStatus
   rejectionReason?: string | null
   createdBy: string | IUser
   author?: string | IUser  // virtual alias for createdBy (legacy)

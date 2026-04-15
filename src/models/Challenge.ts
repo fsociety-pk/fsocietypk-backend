@@ -100,6 +100,11 @@ const challengeSchema = new Schema<IChallengeDocument>(
       enum: ['pending', 'approved', 'rejected'],
       default: 'pending',
     },
+    liveStatus: {
+      type: String,
+      enum: ['live', 'ended'],
+      default: 'live',
+    },
     rejectionReason: {
       type: String,
       default: null,

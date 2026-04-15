@@ -43,6 +43,24 @@ const userSchema = new Schema<IUserDocument>(
       type: String,
       default: '',
     },
+    socialLinks: {
+      linkedin: {
+        type: String,
+        default: '',
+      },
+      github: {
+        type: String,
+        default: '',
+      },
+      instagram: {
+        type: String,
+        default: '',
+      },
+    },
+    isProfilePublic: {
+      type: Boolean,
+      default: true,
+    },
     score: {
       type: Number,
       default: 0,
