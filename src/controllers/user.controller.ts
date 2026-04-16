@@ -5,6 +5,7 @@ import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { changePasswordSchema } from '../validators/auth.validator';
+import { calculateProficiencyIndex } from '../utils/statUtils';
 
 /**
  * @desc    Get current user profile with rank and solve history
@@ -38,10 +39,14 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
     .limit(20)
     .populate('challengeId', 'title category points');
 
+  // 4. Calculate Proficiency Index
+  const proficiencyIndex = await calculateProficiencyIndex(userId);
+
   const profileData = {
     ...user.toObject(),
     rank,
-    solveHistory
+    solveHistory,
+    proficiencyIndex
   };
 
   res.status(200).json(ApiResponse.ok('Profile retrieved successfully', profileData));
@@ -85,7 +90,10 @@ export const getPublicProfile = asyncHandler(async (req: Request, res: Response)
     .limit(20)
     .populate('challengeId', 'title category points');
 
-  // 5. Return only public data
+  // 5. Calculate Proficiency Index
+  const proficiencyIndex = await calculateProficiencyIndex(user._id);
+
+  // 6. Return only public data
   const profileData = {
     _id: user._id,
     username: user.username,
@@ -98,7 +106,8 @@ export const getPublicProfile = asyncHandler(async (req: Request, res: Response)
     createdAt: user.createdAt,
     solvedChallenges: user.solvedChallenges,
     rank,
-    solveHistory
+    solveHistory,
+    proficiencyIndex
   };
 
   res.status(200).json(ApiResponse.ok('Public profile retrieved successfully', profileData));
@@ -111,7 +120,7 @@ export const getPublicProfile = asyncHandler(async (req: Request, res: Response)
  */
 export const updateProfile = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!._id;
-  const { avatar, bio, country, socialLinks, isProfilePublic } = req.body;
+  const { username, avatar, bio, country, socialLinks, isProfilePublic } = req.body;
 
   // 1. Find user
   const user = await User.findById(userId);
@@ -120,6 +129,14 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
   }
 
   // 2. Update allowed fields
+  if (username !== undefined && username.toLowerCase() !== user.username) {
+    const existingUser = await User.findOne({ username: username.toLowerCase() });
+    if (existingUser) {
+      throw ApiError.badRequest('Username already taken');
+    }
+    user.username = username.toLowerCase();
+  }
+
   if (avatar !== undefined) user.avatar = avatar;
   if (bio !== undefined) user.bio = bio;
   if (country !== undefined) user.country = country;

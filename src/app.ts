@@ -10,6 +10,7 @@ const xss = require('xss-clean')
 import { env } from './config/env'
 import logger from './utils/logger'
 import { isOriginAllowed } from './utils/cors'
+import { protect } from './middleware/auth.middleware'
 import { errorHandler } from './middleware/error.middleware'
 
 // ── Route imports (added as they are built) ──────────────────────
@@ -21,7 +22,7 @@ import adminProfileRoutes from './routes/adminProfile.routes'
 import leaderboardRoutes from './routes/leaderboard.routes'
 import notificationRoutes from './routes/notification.routes'
 import projectRoutes from './routes/project.routes'
-
+import * as announcementController from './controllers/announcement.controller'
 
 const app: Application = express()
 
@@ -136,6 +137,7 @@ app.use(`${apiPrefix}/admin-profile`, adminProfileRoutes)
 app.use(`${apiPrefix}/leaderboard`, leaderboardRoutes)
 app.use(`${apiPrefix}/notifications`, notificationRoutes)
 app.use(`${apiPrefix}/projects`, projectRoutes)
+app.get(`${apiPrefix}/announcements`, protect, announcementController.getActiveAnnouncements)
 
 
 // ── 404 handler ───────────────────────────────────────────────────

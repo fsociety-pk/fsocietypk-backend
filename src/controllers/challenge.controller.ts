@@ -226,6 +226,32 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
 });
 
 /**
+ * @desc    Get recent solvers for a challenge
+ * @route   GET /api/v1/challenges/:id/solvers
+ * @access  Private
+ */
+export const getRecentSolvers = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+
+  const submissions = await Submission.find({
+    challengeId: id,
+    isCorrect: true,
+  })
+    .sort({ timestamp: -1 })
+    .limit(5)
+    .populate('userId', 'username avatar score');
+
+  const solvers = submissions.map((s: any) => ({
+    username: s.userId.username,
+    avatar: s.userId.avatar,
+    score: s.userId.score,
+    timestamp: s.timestamp || s.createdAt,
+  }));
+
+  res.status(200).json(ApiResponse.ok('Recent solvers retrieved', solvers));
+});
+
+/**
  * @desc    Submit a new challenge (from any authenticated user)
  * @route   POST /api/v1/challenges
  * @access  Private

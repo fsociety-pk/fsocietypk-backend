@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as adminController from '../controllers/admin.controller';
 import * as analyticsController from '../controllers/admin.analytics.controller';
+import * as announcementController from '../controllers/announcement.controller';
 import { protect, restrictTo } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -12,6 +13,10 @@ router.use(restrictTo('admin'));
 // System Stats & Analytics
 router.get('/stats', adminController.getStats);
 router.get('/analytics', analyticsController.getAnalytics);
+
+// Announcements
+router.post('/announcements', announcementController.createAnnouncement);
+router.get('/announcements', announcementController.getAnnouncements);
 
 // User Management
 router.get('/users', adminController.getUsers);

@@ -11,6 +11,7 @@ router.use(protect);
 router.get('/my-submissions', challengeController.mySubmissions);
 router.get('/', challengeController.getChallenges);
 router.get('/:id', challengeController.getChallengeById);
+router.get('/:id/solvers', challengeController.getRecentSolvers);
 
 // Flag submission (solver side)
 router.post('/submit', challengeController.submitFlag);
