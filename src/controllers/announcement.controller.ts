@@ -41,7 +41,7 @@ export const createAnnouncement = asyncHandler(async (req: Request, res: Respons
  * @route   GET /api/v1/admin/announcements
  * @access  Private/Admin
  */
-export const getAnnouncements = asyncHandler(async (req: Request, res: Response) => {
+export const getAnnouncements = asyncHandler(async (_req: Request, res: Response) => {
   const announcements = await Announcement.find()
     .populate('adminId', 'username')
     .sort({ createdAt: -1 });
@@ -54,7 +54,7 @@ export const getAnnouncements = asyncHandler(async (req: Request, res: Response)
  * @route   GET /api/v1/announcements
  * @access  Private
  */
-export const getActiveAnnouncements = asyncHandler(async (req: Request, res: Response) => {
+export const getActiveAnnouncements = asyncHandler(async (_req: Request, res: Response) => {
   const announcements = await Announcement.find({ isActive: true })
     .sort({ createdAt: -1 })
     .limit(10);

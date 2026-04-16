@@ -1,11 +1,10 @@
 import { Submission } from '../models/Submission';
 import { Challenge } from '../models/Challenge';
-import { User } from '../models/User';
 import mongoose from 'mongoose';
 
 export const calculateProficiencyIndex = async (userId: string | mongoose.Types.ObjectId) => {
   // All active and approved categories
-  const categories = ['web', 'pwn', 'rev', 'crypto', 'forensics', 'osint', 'misc', 'stego', 'network', 'mobile'];
+  const _categories = ['web', 'pwn', 'rev', 'crypto', 'forensics', 'osint', 'misc', 'stego', 'network', 'mobile'];
   
   // Total challenges per category
   const totalInCategory = await Challenge.aggregate([
