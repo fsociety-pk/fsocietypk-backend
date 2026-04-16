@@ -3,9 +3,6 @@ import { Challenge } from '../models/Challenge';
 import mongoose from 'mongoose';
 
 export const calculateProficiencyIndex = async (userId: string | mongoose.Types.ObjectId) => {
-  // All active and approved categories
-  const _categories = ['web', 'pwn', 'rev', 'crypto', 'forensics', 'osint', 'misc', 'stego', 'network', 'mobile'];
-  
   // Total challenges per category
   const totalInCategory = await Challenge.aggregate([
     { $match: { status: 'approved' } },
