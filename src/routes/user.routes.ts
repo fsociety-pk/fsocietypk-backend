@@ -4,13 +4,12 @@ import { protect } from '../middleware/auth.middleware';
 
 const router = Router();
 
+// Protected routes (Specific routes first with explicit middleware)
+router.get('/me/profile', protect, userController.getProfile);
+router.put('/me/profile', protect, userController.updateProfile);
+router.post('/me/change-password', protect, userController.changePassword);
+
 // Public routes (Dynamic routes last)
 router.get('/:username/profile', userController.getPublicProfile);
-
-// Protected routes (Specific routes first)
-router.use(protect);
-router.get('/me/profile', userController.getProfile);
-router.put('/me/profile', userController.updateProfile);
-router.post('/me/change-password', userController.changePassword);
 
 export default router;
