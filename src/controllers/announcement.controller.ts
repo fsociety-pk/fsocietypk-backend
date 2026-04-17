@@ -4,6 +4,8 @@ import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { getIO } from '../socket';
+import { User } from '../models/User';
+import { Notification } from '../models/Notification';
 
 /**
  * @desc    Create a new announcement
@@ -24,6 +26,20 @@ export const createAnnouncement = asyncHandler(async (req: Request, res: Respons
     targetRole: targetRole || 'all'
   });
 
+  // Also create personal Notification items for every user so it shows in their inbox
+  // Also create personal Notification items for every user so it shows in their inbox
+  const users = await User.find({}).select('_id');
+  const notificationsToInsert = users.map((u: any) => ({
+    userId: u._id,
+    title: `Platform Announcement: ${title}`,
+    message: message,
+    type: 'system',
+    read: false
+  }));
+  if (notificationsToInsert.length > 0) {
+    await Notification.insertMany(notificationsToInsert);
+  }
+
   // Emit socket event for real-time notification
   const io = getIO();
   io.emit('newAnnouncement', {
@@ -33,7 +49,7 @@ export const createAnnouncement = asyncHandler(async (req: Request, res: Respons
     createdAt: announcement.createdAt
   });
 
-  res.status(201).json(ApiResponse.created('Announcement created successfully', announcement));
+  res.status(201).json(ApiResponse.created('Announcement created and broadcasted successfully', announcement));
 });
 
 /**

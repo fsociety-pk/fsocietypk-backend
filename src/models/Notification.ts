@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 
 export interface INotification extends Document {
   userId: mongoose.Types.ObjectId;
-  type: 'challenge_submitted' | 'challenge_approved' | 'challenge_rejected' | 'challenge_solved';
+  type: 'challenge_submitted' | 'challenge_approved' | 'challenge_rejected' | 'challenge_solved' | 'system';
   title: string;
   message: string;
   challengeId?: mongoose.Types.ObjectId;
@@ -22,7 +22,7 @@ const notificationSchema = new Schema<INotification>(
     },
     type: {
       type: String,
-      enum: ['challenge_submitted', 'challenge_approved', 'challenge_rejected', 'challenge_solved'],
+      enum: ['challenge_submitted', 'challenge_approved', 'challenge_rejected', 'challenge_solved', 'system'],
       required: true,
     },
     title: {

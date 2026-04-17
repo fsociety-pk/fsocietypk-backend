@@ -14,10 +14,23 @@ export const getAnalytics = asyncHandler(async (_req: Request, res: Response) =>
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
+  // Helper to generate the last 30 dates in YYYY-MM-DD
+  const generateLast30Days = () => {
+    const dates = [];
+    const d = new Date();
+    for (let i = 29; i >= 0; i--) {
+      const dt = new Date(d);
+      dt.setDate(dt.getDate() - i);
+      dates.push(dt.toISOString().split('T')[0]);
+    }
+    return dates;
+  };
+  const last30Days = generateLast30Days();
+
   const [
     overview,
-    userGrowth,
-    submissionTrend,
+    userGrowthRaw,
+    submissionTrendRaw,
     topChallenges,
     categoryStats,
     difficultyStats
@@ -107,6 +120,16 @@ export const getAnalytics = asyncHandler(async (_req: Request, res: Response) =>
         { $project: { difficulty: "$_id", count: 1, _id: 0 } }
       ])
   ]);
+
+  const userGrowth = last30Days.map(date => {
+    const found = userGrowthRaw.find((d: any) => d.date === date);
+    return { date, count: found ? found.count : 0 };
+  });
+
+  const submissionTrend = last30Days.map(date => {
+    const found = submissionTrendRaw.find((d: any) => d.date === date);
+    return { date, solves: found ? found.solves : 0 };
+  });
 
   res.status(200).json(ApiResponse.ok('Analytics retrieved successfully', {
     overview,
