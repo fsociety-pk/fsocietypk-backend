@@ -174,7 +174,7 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
     emitLeaderboardUpdate();
 
     return res.status(200).json(
-      ApiResponse.ok('All flags correct! Points awarded.', {
+      ApiResponse.ok('All flags correct! Challenge completed.', {
         correct: true,
         points: challenge.points,
         completed: true,
@@ -215,7 +215,7 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
     emitLeaderboardUpdate();
 
     return res.status(200).json(
-      ApiResponse.ok('Flag Correct! Points awarded.', {
+      ApiResponse.ok('Flag correct! Challenge completed.', {
         correct: true,
         points: challenge.points,
       })

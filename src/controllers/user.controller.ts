@@ -153,9 +153,33 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
   // 3. Save updated user
   await user.save();
 
+  // 4. Fetch updated user with solvedChallenges populated
+  const updatedUser = await User.findById(userId)
+    .populate({
+      path: 'solvedChallenges',
+      select: 'title category points difficulty slug'
+    });
+
+  // 5. Calculate Rank
+  const rank = await User.countDocuments({ score: { $gt: updatedUser!.score } }) + 1;
+
+  // 6. Fetch recent solve history
+  const solveHistory = await Submission.find({ 
+    userId: userId, 
+    isCorrect: true 
+  })
+    .sort({ timestamp: -1 })
+    .limit(20)
+    .populate('challengeId', 'title category points');
+
+  // 7. Calculate Proficiency Index
+  const proficiencyIndex = await calculateProficiencyIndex(userId);
+
   const profileData = {
-    ...user.toObject(),
-    message: 'Profile updated successfully'
+    ...updatedUser!.toObject(),
+    rank,
+    solveHistory,
+    proficiencyIndex
   };
 
   res.status(200).json(ApiResponse.ok('Profile updated successfully', profileData));

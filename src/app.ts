@@ -22,6 +22,7 @@ import adminProfileRoutes from './routes/adminProfile.routes'
 import leaderboardRoutes from './routes/leaderboard.routes'
 import notificationRoutes from './routes/notification.routes'
 import projectRoutes from './routes/project.routes'
+import writeupRoutes from './routes/writeup.routes'
 import * as announcementController from './controllers/announcement.controller'
 
 const app: Application = express()
@@ -122,7 +123,7 @@ app.get(apiPrefix, (_req: Request, res: Response) => {
     success: true,
     message: 'FsocietyPK API root',
     baseUrl: apiPrefix,
-    modules: ['auth', 'challenges', 'users', 'admin', 'admin-profile', 'leaderboard', 'notifications', 'projects'],
+    modules: ['auth', 'challenges', 'users', 'admin', 'admin-profile', 'leaderboard', 'notifications', 'projects', 'writeups'],
     health: `${apiPrefix}/health`,
   })
 })
@@ -137,6 +138,7 @@ app.use(`${apiPrefix}/admin-profile`, adminProfileRoutes)
 app.use(`${apiPrefix}/leaderboard`, leaderboardRoutes)
 app.use(`${apiPrefix}/notifications`, notificationRoutes)
 app.use(`${apiPrefix}/projects`, projectRoutes)
+app.use(`${apiPrefix}/writeups`, writeupRoutes)
 app.get(`${apiPrefix}/announcements`, protect, announcementController.getActiveAnnouncements)
 
 
