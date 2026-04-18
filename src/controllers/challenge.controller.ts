@@ -244,7 +244,7 @@ export const getRecentSolvers = asyncHandler(async (req: Request, res: Response)
   const solvers = submissions.map((s: any) => ({
     username: s.userId.username,
     avatar: s.userId.avatar,
-    score: s.userId.score,
+    score: s.pointsAwarded,
     timestamp: s.timestamp || s.createdAt,
   }));
 
