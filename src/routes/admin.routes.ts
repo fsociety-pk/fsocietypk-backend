@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as adminController from '../controllers/admin.controller';
 import * as analyticsController from '../controllers/admin.analytics.controller';
 import * as announcementController from '../controllers/announcement.controller';
+import * as resourceController from '../controllers/resource.controller';
 import { protect, restrictTo } from '../middleware/auth.middleware';
 
 const router = Router();
@@ -17,6 +18,11 @@ router.get('/analytics', analyticsController.getAnalytics);
 // Announcements
 router.post('/announcements', announcementController.createAnnouncement);
 router.get('/announcements', announcementController.getAnnouncements);
+
+// Resources Management
+router.get('/resources/pending', resourceController.getPendingResources);
+router.patch('/resources/:id/approve', resourceController.approveResource);
+router.delete('/resources/:id', resourceController.deleteResource);
 
 // User Management
 router.get('/users', adminController.getUsers);
