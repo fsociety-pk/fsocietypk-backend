@@ -17,7 +17,7 @@ const sendTokenResponse = (user: any, statusCode: number, res: Response, message
   const token = jwt.sign(
     { userId: user._id, role: user.role },
     env.JWT_SECRET,
-    { expiresIn: env.JWT_EXPIRES_IN as any }
+    { expiresIn: env.JWT_EXPIRES_IN as any, algorithm: 'HS256' }
   );
 
   const secureCookie = env.JWT_COOKIE_SECURE ?? env.NODE_ENV === 'production';
@@ -36,7 +36,7 @@ const sendTokenResponse = (user: any, statusCode: number, res: Response, message
   res
     .status(statusCode)
     .cookie('jwt', token, cookieOptions)
-    .json(ApiResponse.ok(message, { user: userObj, token }));
+    .json(ApiResponse.ok(message, { user: userObj }));
 };
 
 // ── Controllers ───────────────────────────────────────────────────
@@ -50,7 +50,7 @@ export const register = asyncHandler(async (req: Request, res: Response): Promis
   // 1. Validate input
   const result = registerSchema.safeParse(req.body);
   if (!result.success) {
-    throw ApiError.badRequest('Invalid registration data', result.error.errors);
+    throw ApiError.badRequest('Invalid registration data', result.error.issues);
   }
 
   const { username, password } = result.data;
@@ -97,7 +97,7 @@ export const login = asyncHandler(async (req: Request, res: Response): Promise<v
   // 1. Validate input
   const result = loginSchema.safeParse(req.body);
   if (!result.success) {
-    throw ApiError.badRequest('Invalid login data', result.error.errors);
+    throw ApiError.badRequest('Invalid login data', result.error.issues);
   }
 
   const { username, password } = result.data;
@@ -147,8 +147,7 @@ export const login = asyncHandler(async (req: Request, res: Response): Promise<v
 export const logout = asyncHandler(async (_req: Request, res: Response) => {
   const secureCookie = env.JWT_COOKIE_SECURE ?? env.NODE_ENV === 'production';
 
-  res.cookie('jwt', 'none', {
-    expires: new Date(Date.now() + 10 * 1000),
+  res.clearCookie('jwt', {
     httpOnly: true,
     secure: secureCookie,
     sameSite: env.JWT_COOKIE_SAME_SITE,

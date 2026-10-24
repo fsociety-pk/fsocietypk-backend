@@ -6,6 +6,7 @@ import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { createNotification, notificationTemplates } from '../utils/notificationHelper';
+import { sendChallengeSubmissionEmail } from '../utils/emailHelper';
 
 /** Validate flag format */
 const FLAG_REGEX = /^fsociety\{.+\}$/i;
@@ -87,7 +88,7 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
   }
 
   // Fetch challenge with flag selected
-  const challenge = await Challenge.findById(challengeId).select('+flag');
+  const challenge = await Challenge.findById(challengeId).select('+flag +flags');
   if (!challenge || !challenge.isActive || challenge.status !== 'approved') {
     throw ApiError.notFound('Challenge not found');
   }
@@ -122,7 +123,6 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
     await Submission.create({
       userId: req.user!._id,
       challengeId,
-      submittedFlag: normalizedFlag,
       isCorrect,
       pointsAwarded: 0,
       sequenceNumber: nextFlag.sequence,
@@ -153,6 +153,23 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
       );
     }
 
+    const scoreAward = await User.findOneAndUpdate(
+      { _id: req.user!._id, solvedChallenges: { $ne: challengeId } },
+      {
+        $inc: { score: challenge.points },
+        $addToSet: { solvedChallenges: challengeId },
+      },
+      { new: true }
+    );
+
+    if (!scoreAward) {
+      await Submission.findOneAndUpdate(
+        { userId: req.user!._id, challengeId, isCorrect: true, sequenceNumber: nextFlag.sequence },
+        { $set: { isCorrect: false, pointsAwarded: 0 } }
+      );
+      return res.status(200).json(ApiResponse.ok('Challenge already solved!', { correct: true, completed: true }));
+    }
+
     await Submission.findOneAndUpdate(
       {
         userId: req.user!._id,
@@ -164,11 +181,6 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
     );
 
     await Challenge.findByIdAndUpdate(challengeId, { $inc: { solveCount: 1 } });
-
-    await User.findByIdAndUpdate(req.user!._id, {
-      $inc: { score: challenge.points },
-      $addToSet: { solvedChallenges: challengeId },
-    });
 
     const { emitLeaderboardUpdate } = await import('../socket');
     emitLeaderboardUpdate();
@@ -195,21 +207,29 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
 
   const isCorrect = await challenge.compareFlag(normalizedFlag);
 
-  await Submission.create({
+  const submission = await Submission.create({
     userId: req.user!._id,
     challengeId,
-    submittedFlag: normalizedFlag,
     isCorrect,
     pointsAwarded: isCorrect ? challenge.points : 0,
   });
 
   if (isCorrect) {
-    await Challenge.findByIdAndUpdate(challengeId, { $inc: { solveCount: 1 } });
+    const scoreAward = await User.findOneAndUpdate(
+      { _id: req.user!._id, solvedChallenges: { $ne: challengeId } },
+      {
+        $inc: { score: challenge.points },
+        $addToSet: { solvedChallenges: challengeId },
+      },
+      { new: true }
+    );
 
-    await User.findByIdAndUpdate(req.user!._id, {
-      $inc: { score: challenge.points },
-      $addToSet: { solvedChallenges: challengeId },
-    });
+    if (!scoreAward) {
+      await Submission.findByIdAndUpdate(submission._id, { $set: { isCorrect: false, pointsAwarded: 0 } });
+      return res.status(200).json(ApiResponse.ok('Challenge already solved!', { correct: true, points: 0 }));
+    }
+
+    await Challenge.findByIdAndUpdate(challengeId, { $inc: { solveCount: 1 } });
 
     const { emitLeaderboardUpdate } = await import('../socket');
     emitLeaderboardUpdate();
@@ -260,8 +280,24 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
   const { title, description, category, difficulty, flag, flags, hints, attachments } = req.body;
 
   // Validate required fields
-  if (!title || !description || !category || !difficulty) {
+  if (
+    typeof title !== 'string' || !title.trim() || title.length > 120 ||
+    typeof description !== 'string' || !description.trim() || description.length > 12000 ||
+    typeof category !== 'string' ||
+    typeof difficulty !== 'string'
+  ) {
     throw ApiError.badRequest('Title, description, category, difficulty, and flag/flags are required');
+  }
+
+  const allowedCategories = ['web', 'pwn', 'rev', 'crypto', 'forensics', 'osint', 'misc', 'stego', 'network', 'mobile'];
+  const allowedDifficulties = ['easy', 'medium', 'hard', 'insane'];
+  if (!allowedCategories.includes(category.toLowerCase()) || !allowedDifficulties.includes(difficulty.toLowerCase())) {
+    throw ApiError.badRequest('Invalid challenge category or difficulty');
+  }
+
+  if ((hints !== undefined && (!Array.isArray(hints) || hints.length > 20)) ||
+      (attachments !== undefined && (!Array.isArray(attachments) || attachments.length > 10))) {
+    throw ApiError.badRequest('A challenge can have at most 20 hints and 10 attachments');
   }
 
   const hasSingleFlag = typeof flag === 'string' && flag.trim().length > 0;
@@ -279,13 +315,19 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
   if (hasSingleFlag && !FLAG_REGEX.test(flag.trim())) {
     throw ApiError.badRequest('Flag must follow the format: fsociety{...}');
   }
+  if (hasSingleFlag && flag.trim().length > 500) {
+    throw ApiError.badRequest('Flag is too long');
+  }
 
   // Validate flag format for multiple flags
   if (hasMultiFlags) {
+    if (flags.length > 20) {
+      throw ApiError.badRequest('A challenge can have at most 20 flags');
+    }
     const sequenceSet = new Set<number>();
 
     for (const f of flags) {
-      if (!Number.isInteger(f.sequence) || f.sequence < 1) {
+      if (!f || typeof f !== 'object' || !Number.isInteger(f.sequence) || f.sequence < 1) {
         throw ApiError.badRequest('Each multi-flag entry must have a sequence number starting from 1');
       }
 
@@ -294,7 +336,7 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
       }
       sequenceSet.add(f.sequence);
 
-      if (!f.value || !FLAG_REGEX.test(f.value.trim())) {
+      if (typeof f.value !== 'string' || !FLAG_REGEX.test(f.value.trim()) || f.value.trim().length > 500) {
         throw ApiError.badRequest(`Each flag must follow the format: fsociety{...}`);
       }
     }
@@ -308,18 +350,30 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
 
   // Build hints array if provided
   const parsedHints = Array.isArray(hints)
-    ? hints
-        .filter((h: any) => typeof h === 'string' ? h.trim() : h?.content?.trim())
-        .map((h: any) =>
-          typeof h === 'string'
-            ? { content: h.trim(), cost: 0 }
-            : { content: h.content?.trim(), cost: h.cost ?? 0 }
-        )
+    ? hints.map((hint: unknown) => {
+        if (typeof hint === 'string') {
+          if (hint.length > 1000) throw ApiError.badRequest('Hint content cannot exceed 1000 characters');
+          return { content: hint.trim(), cost: 0 };
+        }
+        if (!hint || typeof hint !== 'object' || !('content' in hint) || typeof hint.content !== 'string' || hint.content.length > 1000) {
+          throw ApiError.badRequest('Each hint must have valid content under 1000 characters');
+        }
+        const cost = 'cost' in hint && hint.cost !== undefined ? hint.cost : 0;
+        if (typeof cost !== 'number' || !Number.isFinite(cost) || cost < 0 || cost > 10000) {
+          throw ApiError.badRequest('Hint cost must be a number between 0 and 10000');
+        }
+        return { content: hint.content.trim(), cost };
+      }).filter((hint) => hint.content.length > 0)
     : [];
 
   // Build attachments array if provided
   const parsedAttachments = Array.isArray(attachments)
-    ? attachments.filter((a: string) => typeof a === 'string' && a.trim()).map((a: string) => a.trim())
+    ? attachments.map((attachment: unknown) => {
+        if (typeof attachment !== 'string' || attachment.length > 2048) {
+          throw ApiError.badRequest('Each attachment must be a string under 2048 characters');
+        }
+        return attachment.trim();
+      }).filter(Boolean)
     : [];
 
   const isAdminSubmission = req.user?.role === 'admin';
@@ -367,6 +421,11 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
     const submitter = await User.findById(req.user!._id).select('username');
     const submitterUsername = submitter?.username || 'A user';
     const adminTemplate = notificationTemplates.challengeSubmissionNotification(submitterUsername, challenge.title);
+
+    await sendChallengeSubmissionEmail({
+      challengeTitle: challenge.title,
+      submitterUsername,
+    });
 
     await Promise.all(
       admins

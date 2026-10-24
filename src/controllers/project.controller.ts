@@ -1,6 +1,27 @@
 import { Request, Response } from 'express';
 import { Project } from '../models/Project';
 import mongoose from 'mongoose';
+import { z } from 'zod';
+
+const httpUrlOrEmpty = z.string().max(2048).refine((value) => {
+  if (!value) return true;
+  try {
+    return ['http:', 'https:'].includes(new URL(value).protocol);
+  } catch {
+    return false;
+  }
+}, 'URL must use HTTP or HTTPS');
+
+const projectSchema = z.object({
+  title: z.string().trim().min(1).max(150),
+  description: z.string().trim().min(1).max(10000),
+  techStack: z.array(z.string().trim().min(1).max(50)).max(30).default([]),
+  websiteUrl: httpUrlOrEmpty.optional(),
+  sourceCodeUrl: httpUrlOrEmpty.optional(),
+  features: z.array(z.string().trim().min(1).max(300)).max(50).optional(),
+}).strict();
+
+const projectUpdateSchema = projectSchema.partial().refine((value) => Object.keys(value).length > 0, 'At least one project field is required');
 
 export const getProjects = async (_req: Request, res: Response) => {
   try {
@@ -54,7 +75,12 @@ export const getProjectById = async (req: Request, res: Response) => {
 
 export const createProject = async (req: Request, res: Response) => {
   try {
-    const project = await Project.create(req.body);
+    const parsed = projectSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, data: null, message: 'Invalid project data', errors: parsed.error.issues });
+    }
+
+    const project = await Project.create(parsed.data);
     return res.status(201).json({
       success: true,
       data: project,
@@ -86,7 +112,12 @@ export const updateProject = async (req: Request, res: Response) => {
       });
     }
 
-    const updatedProject = await Project.findByIdAndUpdate(req.params.id, req.body, {
+    const parsed = projectUpdateSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return res.status(400).json({ success: false, data: null, message: 'Invalid project data', errors: parsed.error.issues });
+    }
+
+    const updatedProject = await Project.findByIdAndUpdate(req.params.id, parsed.data, {
       new: true,
       runValidators: true,
     });

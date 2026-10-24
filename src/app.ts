@@ -12,6 +12,7 @@ import logger from './utils/logger'
 import { isOriginAllowed } from './utils/cors'
 import { protect } from './middleware/auth.middleware'
 import { errorHandler } from './middleware/error.middleware'
+import { verifyRequestOrigin } from './middleware/csrf.middleware'
 
 // ── Route imports (added as they are built) ──────────────────────
 import authRoutes from './routes/auth.routes'
@@ -27,6 +28,7 @@ import resourceRoutes from './routes/resource.routes'
 import * as announcementController from './controllers/announcement.controller'
 
 const app: Application = express()
+app.set('trust proxy', env.TRUST_PROXY_HOPS)
 
 const normalizePrefix = (prefix: string): string => {
   const trimmed = prefix.trim()
@@ -39,17 +41,7 @@ const normalizePrefix = (prefix: string): string => {
 const apiPrefix = normalizePrefix(env.API_PREFIX)
 
 // ── Security middleware ───────────────────────────────────────────
-app.use(helmet({
-  crossOriginEmbedderPolicy: false,
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      scriptSrc: ["'self'", "'unsafe-inline'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      imgSrc: ["'self'", 'data:', 'https:'],
-    },
-  },
-}))
+app.use(helmet({ crossOriginEmbedderPolicy: false }))
 
 // ── CORS ──────────────────────────────────────────────────────────
 app.use(cors({
@@ -59,12 +51,16 @@ app.use(cors({
       return
     }
 
-    callback(new Error(`CORS blocked for origin: ${origin}`))
+    callback(null, false)
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }))
+
+// CORS controls response access; this separately blocks cross-origin browser
+// requests that could mutate state through the authentication cookie.
+app.use(verifyRequestOrigin)
 
 // ── Rate limiting ────────────────────────────────────────────────
 const globalLimiter = rateLimit({
@@ -85,23 +81,20 @@ const authLimiter = rateLimit({
   message: { success: false, message: 'Too many authentication attempts. Please try again after 15 minutes.' },
 })
 
-// ── NoSQL Injection Prevention ────────────────────────────────────
-app.use(mongoSanitize())
-
-// ── XSS Prevention ────────────────────────────────────────────────
-app.use(xss())
-
-// ── HTTP Parameter Pollution ──────────────────────────────────────
-app.use(hpp())
-
 // ── Body parsing ──────────────────────────────────────────────────
-app.use(express.json({ limit: '10mb' }))
-app.use(express.urlencoded({ extended: true, limit: '10mb' }))
+app.use(express.json({ limit: '2mb' }))
+app.use(express.urlencoded({ extended: true, limit: '2mb' }))
 app.use(cookieParser())
+
+// Run input sanitizers after parsers so req.body and req.query are populated.
+app.use(mongoSanitize())
+app.use(xss())
+app.use(hpp())
 
 // ── HTTP logger ───────────────────────────────────────────────────
 if (env.NODE_ENV !== 'test') {
-  app.use(morgan('combined', {
+  morgan.token('safe-url', (req) => (req as Request).path)
+  app.use(morgan(':remote-addr :method :safe-url :status :res[content-length] - :response-time ms', {
     stream: { write: (message: string) => logger.http(message.trim()) },
   }))
 }
@@ -112,7 +105,6 @@ const healthHandler = (_req: Request, res: Response) => {
     success: true,
     message: 'FsocietyPK API is operational',
     timestamp: new Date().toISOString(),
-    environment: env.NODE_ENV,
   })
 }
 
@@ -150,7 +142,7 @@ app.use((req: Request, res: Response) => {
     success: false,
     message: 'Route not found',
     method: req.method,
-    path: req.originalUrl,
+    path: req.path,
   })
 })
 

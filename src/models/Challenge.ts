@@ -54,18 +54,21 @@ const challengeSchema = new Schema<IChallengeDocument>(
       required: false, // Deprecated: kept for backwards compatibility
       select: false,
     },
-    flags: [
-      {
-        sequence: {
-          type: Number,
-          required: true,
+    flags: {
+      type: [
+        {
+          sequence: {
+            type: Number,
+            required: true,
+          },
+          value: {
+            type: String,
+            required: true,
+          },
         },
-        value: {
-          type: String,
-          required: true,
-        },
-      },
-    ],
+      ],
+      select: false,
+    },
     hints: [
       {
         content: String,

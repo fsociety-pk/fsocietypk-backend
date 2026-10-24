@@ -37,6 +37,12 @@ export const errorHandler = (
       : 'This resource already exists'
   }
 
+  // Never expose unexpected exception or database messages in production.
+  if (statusCode >= 500 && !err.isOperational && env.NODE_ENV === 'production') {
+    message = 'Internal Server Error'
+    errors = undefined
+  }
+
   // JWT errors
   if (err.name === 'JsonWebTokenError') {
     statusCode = 401

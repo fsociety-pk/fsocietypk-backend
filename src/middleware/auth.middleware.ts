@@ -47,16 +47,20 @@ export const protect = async (
     }
 
     // 2. Verify token
-    const decoded = jwt.verify(token, env.JWT_SECRET) as JwtPayload
+    const decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload
 
     // 3. Check user still exists in DB and is not banned
-    const user = await User.findById(decoded.userId).select('role isBanned')
+    const user = await User.findById(decoded.userId).select('role isBanned +passwordChangedAt')
     if (!user) {
       return next(ApiError.unauthorized('User belonging to this token no longer exists'))
     }
 
     if (user.isBanned) {
       return next(ApiError.forbidden('Your account has been banned. Access denied.'))
+    }
+
+    if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
+      return next(ApiError.unauthorized('Password changed. Please log in again.'))
     }
 
     // 4. Attach to request

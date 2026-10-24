@@ -1,12 +1,12 @@
 import { Request, Response, NextFunction } from 'express';
-import { AnyZodObject, ZodError } from 'zod';
+import { ZodError, ZodType } from 'zod';
 import { ApiError } from '../utils/ApiError';
 
 /**
  * Middleware to validate request data (body, params, query) using Zod schemas.
  * Catch-all for input validation to prevent invalid data from reaching controllers.
  */
-export const validate = (schema: AnyZodObject) => 
+export const validate = (schema: ZodType) =>
   async (req: Request, _res: Response, next: NextFunction) => {
     try {
       await schema.parseAsync({
@@ -17,7 +17,7 @@ export const validate = (schema: AnyZodObject) =>
       return next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = error.errors.map(err => ({
+        const errors = error.issues.map(err => ({
           field: err.path.join('.'),
           message: err.message,
         }));

@@ -16,6 +16,7 @@ export interface IUserDocument extends Document {
   createdAt: Date;
   updatedAt: Date;
   password?: string;
+  passwordChangedAt?: Date;
   comparePassword(password: string): Promise<boolean>;
 }
 
@@ -36,6 +37,10 @@ const userSchema = new Schema<IUserDocument>(
       required: [true, 'Password is required'],
       minlength: [8, 'Password must be at least 8 characters'],
       select: false, // Don't return password by default
+    },
+    passwordChangedAt: {
+      type: Date,
+      select: false,
     },
     role: {
       type: String,

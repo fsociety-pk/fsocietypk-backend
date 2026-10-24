@@ -4,8 +4,9 @@ import { Submission } from '../models/Submission';
 import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
-import { changePasswordSchema } from '../validators/auth.validator';
+import { changePasswordSchema, updateUserProfileSchema } from '../validators/auth.validator';
 import { calculateProficiencyIndex } from '../utils/statUtils';
+import { env } from '../config/env';
 
 /**
  * @desc    Get current user profile with rank and solve history
@@ -120,7 +121,11 @@ export const getPublicProfile = asyncHandler(async (req: Request, res: Response)
  */
 export const updateProfile = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!._id;
-  const { username, avatar, bio, country, socialLinks, isProfilePublic } = req.body;
+  const parsed = updateUserProfileSchema.safeParse(req.body);
+  if (!parsed.success) {
+    throw ApiError.badRequest('Invalid profile data', parsed.error.issues);
+  }
+  const { username, avatar, bio, country, socialLinks, isProfilePublic } = parsed.data;
 
   // 1. Find user
   const user = await User.findById(userId);
@@ -194,7 +199,7 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
   // 1. Validate Input
   const result = changePasswordSchema.safeParse(req.body);
   if (!result.success) {
-    throw ApiError.badRequest('Invalid password data', result.error.errors);
+    throw ApiError.badRequest('Invalid password data', result.error.issues);
   }
 
   const { currentPassword, newPassword } = result.data;
@@ -218,7 +223,15 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
 
   // 5. Update password
   user.password = newPassword;
+  user.passwordChangedAt = new Date();
   await user.save();
 
-  res.status(200).json(ApiResponse.ok('Password updated successfully', null));
+  const secureCookie = env.JWT_COOKIE_SECURE ?? env.NODE_ENV === 'production';
+  res.clearCookie('jwt', {
+    httpOnly: true,
+    secure: secureCookie,
+    sameSite: env.JWT_COOKIE_SAME_SITE,
+  });
+
+  res.status(200).json(ApiResponse.ok('Password updated. Please log in again.', null));
 });

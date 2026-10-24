@@ -3,8 +3,6 @@ import { env } from '../config/env'
 const STATIC_ALLOWED_ORIGINS = [
   'https://fsocietypk.tech',
   'https://www.fsocietypk.tech',
-  'http://fsocietypk.tech',
-  'http://www.fsocietypk.tech',
 ]
 
 const envAllowedOrigins = env.CORS_ORIGIN.split(',')

@@ -19,6 +19,10 @@ export const createAnnouncement = asyncHandler(async (req: Request, res: Respons
     throw ApiError.badRequest('Title and message are required');
   }
 
+  if (!['all', 'user', 'admin'].includes(targetRole || 'all')) {
+    throw ApiError.badRequest('Target role must be all, user, or admin');
+  }
+
   const announcement = await Announcement.create({
     adminId: req.user!._id,
     title,
@@ -26,9 +30,9 @@ export const createAnnouncement = asyncHandler(async (req: Request, res: Respons
     targetRole: targetRole || 'all'
   });
 
-  // Also create personal Notification items for every user so it shows in their inbox
-  // Also create personal Notification items for every user so it shows in their inbox
-  const users = await User.find({}).select('_id');
+  // Only notify the audience selected for this announcement.
+  const audienceFilter = announcement.targetRole === 'all' ? {} : { role: announcement.targetRole };
+  const users = await User.find(audienceFilter).select('_id');
   const notificationsToInsert = users.map((u: any) => ({
     userId: u._id,
     title: `Platform Announcement: ${title}`,
@@ -40,14 +44,16 @@ export const createAnnouncement = asyncHandler(async (req: Request, res: Respons
     await Notification.insertMany(notificationsToInsert);
   }
 
-  // Emit socket event for real-time notification
-  const io = getIO();
-  io.emit('newAnnouncement', {
-    _id: announcement._id,
-    title: announcement.title,
-    message: announcement.message,
-    createdAt: announcement.createdAt
-  });
+  // Socket connections are currently public, so only broadcast announcements
+  // intended for everyone. Role-targeted items remain available via the API.
+  if (announcement.targetRole === 'all') {
+    getIO().emit('newAnnouncement', {
+      _id: announcement._id,
+      title: announcement.title,
+      message: announcement.message,
+      createdAt: announcement.createdAt
+    });
+  }
 
   res.status(201).json(ApiResponse.created('Announcement created and broadcasted successfully', announcement));
 });
@@ -70,8 +76,11 @@ export const getAnnouncements = asyncHandler(async (_req: Request, res: Response
  * @route   GET /api/v1/announcements
  * @access  Private
  */
-export const getActiveAnnouncements = asyncHandler(async (_req: Request, res: Response) => {
-  const announcements = await Announcement.find({ isActive: true })
+export const getActiveAnnouncements = asyncHandler(async (req: Request, res: Response) => {
+  const announcements = await Announcement.find({
+    isActive: true,
+    targetRole: { $in: ['all', req.user!.role] },
+  })
     .sort({ createdAt: -1 })
     .limit(10);
 

@@ -3,7 +3,7 @@ import mongoose, { Schema, Document } from 'mongoose';
 export interface ISubmissionDocument extends Document {
   userId: mongoose.Types.ObjectId;
   challengeId: mongoose.Types.ObjectId;
-  submittedFlag: string;
+  submittedFlag?: string;
   sequenceNumber?: number;
   isCorrect: boolean;
   pointsAwarded: number;
@@ -24,8 +24,8 @@ const submissionSchema = new Schema<ISubmissionDocument>(
     },
     submittedFlag: {
       type: String,
-      required: [true, 'Submitted flag is required'],
       trim: true,
+      select: false,
     },
     sequenceNumber: {
       type: Number,
@@ -52,5 +52,25 @@ const submissionSchema = new Schema<ISubmissionDocument>(
 
 // Compound index: quickly find a user's solve for a specific challenge
 submissionSchema.index({ userId: 1, challengeId: 1 });
+
+// Prevent parallel requests from awarding the same single-flag solve twice.
+submissionSchema.index(
+  { userId: 1, challengeId: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isCorrect: true, sequenceNumber: null },
+    name: 'unique_single_flag_solve',
+  }
+);
+
+// Multi-flag challenges can award each sequence exactly once per user.
+submissionSchema.index(
+  { userId: 1, challengeId: 1, sequenceNumber: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { isCorrect: true, sequenceNumber: { $type: 'number' } },
+    name: 'unique_multi_flag_step_solve',
+  }
+);
 
 export const Submission = mongoose.model<ISubmissionDocument>('Submission', submissionSchema);
