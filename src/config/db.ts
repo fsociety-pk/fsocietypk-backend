@@ -22,27 +22,36 @@ export const connectDB = async (): Promise<void> => {
 
     isConnected = true
 
-    logger.info(`MongoDB connected → ${conn.connection.host}`)
-    logger.info(`Database         → ${conn.connection.name}`)
+    logger.info(`MongoDB status: CONNECTED → ${conn.connection.host}`)
+    logger.info(`MongoDB database: ${conn.connection.name}`)
 
     // Connection event handlers
     mongoose.connection.on('disconnected', () => {
       isConnected = false
-      logger.warn('MongoDB disconnected')
+      logger.error('MongoDB status: DISCONNECTED')
     })
 
     mongoose.connection.on('reconnected', () => {
       isConnected = true
-      logger.info('MongoDB reconnected')
+      logger.info('MongoDB status: RECONNECTED')
     })
 
     mongoose.connection.on('error', (err) => {
-      logger.error('MongoDB connection error:', err)
+      logger.error('MongoDB connection error.', {
+        name: err.name,
+        code: (err as any).code,
+        message: err.message.slice(0, 300),
+      })
       isConnected = false
     })
 
   } catch (error) {
-    logger.error('MongoDB connection failed:', error)
+    const dbError = error as { name?: string; code?: string; message?: string }
+    logger.error('MongoDB connection failed.', {
+      name: dbError?.name,
+      code: dbError?.code,
+      message: dbError?.message?.slice(0, 300),
+    })
     throw error
   }
 }

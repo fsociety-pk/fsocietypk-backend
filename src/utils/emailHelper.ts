@@ -24,6 +24,32 @@ const transporter = emailIsConfigured
     })
   : null;
 
+const getSafeMailError = (error: unknown): { code?: string; responseCode?: number; message: string } => {
+  const mailError = error as { code?: unknown; responseCode?: unknown; message?: unknown } | null;
+  return {
+    ...(typeof mailError?.code === 'string' && { code: mailError.code }),
+    ...(typeof mailError?.responseCode === 'number' && { responseCode: mailError.responseCode }),
+    message: (typeof mailError?.message === 'string' ? mailError.message : 'Unknown email transport error').slice(0, 300),
+  };
+};
+
+/** Check SMTP connectivity and authentication without sending a message. */
+export const verifyChallengeEmailTransport = async (): Promise<void> => {
+  if (!transporter) {
+    logger.warn('SMTP status: NOT CONFIGURED — challenge email notifications are disabled.');
+    return;
+  }
+
+  logger.info(`SMTP status: checking ${env.SMTP_HOST}:${env.SMTP_PORT}...`);
+
+  try {
+    await transporter.verify();
+    logger.info('SMTP status: READY — server connection and authentication succeeded.');
+  } catch (error) {
+    logger.error('SMTP status: FAILED — challenge emails will not send until this is fixed.', getSafeMailError(error));
+  }
+};
+
 export const sendChallengeSubmissionEmail = async ({
   challengeTitle,
   submitterUsername,
@@ -32,12 +58,12 @@ export const sendChallengeSubmissionEmail = async ({
   submitterUsername: string;
 }): Promise<void> => {
   if (!transporter || !env.CHALLENGE_NOTIFICATION_EMAIL || !env.SMTP_USER) {
-    logger.info('Challenge email notifications are disabled; SMTP settings are incomplete.');
+    logger.debug('Skipped challenge email because SMTP settings are incomplete.');
     return;
   }
 
   try {
-    await transporter.sendMail({
+    const result = await transporter.sendMail({
       from: `FsocietyPK Notifications <${env.SMTP_USER}>`,
       to: env.CHALLENGE_NOTIFICATION_EMAIL,
       subject: 'New challenge submission awaiting review',
@@ -50,8 +76,9 @@ export const sendChallengeSubmissionEmail = async ({
         'Open the admin dashboard to review it.',
       ].join('\n'),
     });
+    logger.info('Challenge submission email sent successfully.', { messageId: result.messageId });
   } catch (error) {
     // Email is a secondary alert; a provider issue must not fail the challenge submission.
-    logger.error('Could not send challenge submission email:', error);
+    logger.error('Could not send challenge submission email.', getSafeMailError(error));
   }
 };

@@ -22,12 +22,14 @@ export const initSocket = (server: HttpServer) => {
   });
 
   io.on('connection', (socket) => {
-    logger.info(`User connected: ${socket.id}`);
+    logger.debug(`Socket.IO client connected: ${socket.id}`);
 
     socket.on('disconnect', () => {
-      logger.info(`User disconnected: ${socket.id}`);
+      logger.debug(`Socket.IO client disconnected: ${socket.id}`);
     });
   });
+
+  logger.info('Socket.IO status: READY — websocket server initialized.');
 
   return io;
 };
