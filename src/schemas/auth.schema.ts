@@ -15,10 +15,10 @@ export const signupSchema = z.object({
       .regex(/^[a-zA-Z0-9_-]+$/, 'USERNAME_INVALID_CHARACTERS'),
     password: z.string()
       .min(8, 'PASSWORD_MINIMUM_LENGTH_8')
-      .refine((password) => Buffer.byteLength(password, 'utf8') <= 72, 'PASSWORD_MAX_BCRYPT_LENGTH_72_BYTES')
       .regex(/[A-Z]/, 'PASSWORD_UPPERCASE_REQUIRED')
       .regex(/[a-z]/, 'PASSWORD_LOWERCASE_REQUIRED')
       .regex(/[0-9]/, 'PASSWORD_NUMBER_REQUIRED')
-      .regex(/[^a-zA-Z0-9]/, 'PASSWORD_SPECIAL_CHAR_REQUIRED'),
+      .regex(/[^a-zA-Z0-9]/, 'PASSWORD_SPECIAL_CHAR_REQUIRED')
+      .refine((password) => Buffer.byteLength(password, 'utf8') <= 72, 'PASSWORD_MAX_BCRYPT_LENGTH_72_BYTES'),
   }),
 });
