@@ -8,8 +8,9 @@ import { z } from 'zod';
  * - at least 1 uppercase, 1 lowercase, 1 number, 1 special character
  */
 export const registerSchema = z.object({
+  email: z.string().trim().toLowerCase().email('Enter a valid email address').max(254),
   username: z
-    .string()
+    .string().trim().toLowerCase()
     .min(3, 'Username must be at least 3 characters')
     .max(30, 'Username cannot exceed 30 characters')
     .regex(/^[a-zA-Z0-9_-]+$/, 'Username can only contain letters, numbers, underscores and hyphens'),
@@ -27,8 +28,8 @@ export const registerSchema = z.object({
  * ── Login Schema ──────────────────────────────────────────────────
  */
 export const loginSchema = z.object({
-  username: z.string().min(1, 'Username is required'),
-  password: z.string().min(1, 'Password is required'),
+  username: z.string().trim().toLowerCase().min(1, 'Username or email is required').max(254),
+  password: z.string().min(1, 'Password is required').max(256),
 });
 
 export type RegisterInput = z.infer<typeof registerSchema>;
@@ -61,9 +62,27 @@ const safeProfileUrl = z.string().max(2048).refine((value) => {
   }
 }, 'URL must use HTTP or HTTPS');
 
+// The profile UI submits a resized raster image. Never accept SVG or arbitrary data URLs.
+export const avatarSchema = z.string().max(700_000, 'Photo must be smaller than 512 KB').refine(value => {
+  if (!value || safeProfileUrl.safeParse(value).success) return true;
+  const match = /^data:image\/(jpeg|png|webp);base64,([A-Za-z0-9+/]+={0,2})$/.exec(value);
+  if (!match || match[2].length % 4 !== 0) return false;
+  const bytes = Buffer.from(match[2], 'base64');
+  if (bytes.length > 512 * 1024 || bytes.length < 12) return false;
+  if (match[1] === 'jpeg') return bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff;
+  if (match[1] === 'png') return bytes.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+  return bytes.toString('ascii', 0, 4) === 'RIFF' && bytes.toString('ascii', 8, 12) === 'WEBP';
+}, 'Choose a valid JPG, PNG or WebP photo, or an HTTP(S) image URL');
+
+export const verifyEmailSchema = z.object({
+  registrationId: z.string().regex(/^[a-f0-9]{64}$/),
+  code: z.string().regex(/^\d{6}$/, 'Enter the six-digit code from your email'),
+});
+export const resendOtpSchema = verifyEmailSchema.pick({ registrationId: true });
+
 export const updateUserProfileSchema = z.object({
   username: z.string().min(3).max(30).regex(/^[a-zA-Z0-9_-]+$/).optional(),
-  avatar: safeProfileUrl.optional(),
+  avatar: avatarSchema.optional(),
   bio: z.string().max(200).optional(),
   country: z.string().max(100).optional(),
   isProfilePublic: z.boolean().optional(),

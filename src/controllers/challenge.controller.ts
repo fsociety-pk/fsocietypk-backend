@@ -56,12 +56,14 @@ export const getChallengeById = asyncHandler(async (req: Request, res: Response)
     userId: req.user!._id,
     challengeId: req.params.id,
     isCorrect: true,
-  });
+    pointsAwarded: { $gt: 0 },
+  }).sort({ timestamp: 1 });
 
   res.status(200).json(
     ApiResponse.ok('Challenge detail retrieved', {
       ...challenge.toObject(),
       isSolved: !!solved,
+      completedAt: solved?.timestamp ?? null,
     })
   );
 });
@@ -120,7 +122,7 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
 
     const isCorrect = await challenge.compareFlag(normalizedFlag, nextFlag.sequence);
 
-    await Submission.create({
+    const submission = await Submission.create({
       userId: req.user!._id,
       challengeId,
       isCorrect,
@@ -190,6 +192,7 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
         correct: true,
         points: challenge.points,
         completed: true,
+        completedAt: submission.timestamp,
       })
     );
   }
@@ -202,7 +205,7 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
   });
 
   if (existingSolve) {
-    return res.status(200).json(ApiResponse.ok('Challenge already solved!', { correct: true }));
+    return res.status(200).json(ApiResponse.ok('Challenge already solved!', { correct: true, completed: true, completedAt: existingSolve.timestamp }));
   }
 
   const isCorrect = await challenge.compareFlag(normalizedFlag);
@@ -238,6 +241,7 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
       ApiResponse.ok('Flag correct! Challenge completed.', {
         correct: true,
         points: challenge.points,
+        completedAt: submission.timestamp,
       })
     );
   }

@@ -9,6 +9,7 @@ export interface JwtPayload {
   role: 'user' | 'admin'
   iat: number
   exp: number
+  sessionVersion?: number
 }
 
 // Extend Express Request to carry the authenticated user
@@ -50,7 +51,7 @@ export const protect = async (
     const decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: ['HS256'] }) as JwtPayload
 
     // 3. Check user still exists in DB and is not banned
-    const user = await User.findById(decoded.userId).select('role isBanned +passwordChangedAt')
+    const user = await User.findById(decoded.userId).select('role isBanned +passwordChangedAt +sessionVersion')
     if (!user) {
       return next(ApiError.unauthorized('User belonging to this token no longer exists'))
     }
@@ -59,7 +60,11 @@ export const protect = async (
       return next(ApiError.forbidden('Your account has been banned. Access denied.'))
     }
 
-    if (user.passwordChangedAt && decoded.iat * 1000 < user.passwordChangedAt.getTime()) {
+    // Versions revoke old sessions without relying on JWT's second-resolution iat.
+    // Preserve the timestamp check for tokens issued before versions were added.
+    if ((decoded.sessionVersion ?? 0) !== (user.sessionVersion ?? 0) ||
+        (decoded.sessionVersion === undefined && user.passwordChangedAt &&
+         (!decoded.iat || decoded.iat * 1000 < user.passwordChangedAt.getTime()))) {
       return next(ApiError.unauthorized('Password changed. Please log in again.'))
     }
 

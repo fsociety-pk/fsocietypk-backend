@@ -205,7 +205,7 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
   const { currentPassword, newPassword } = result.data;
 
   // 2. Find user (include password for comparison)
-  const user = await User.findById(req.user!._id).select('+password');
+  const user = await User.findById(req.user!._id).select('+password +sessionVersion');
   if (!user) {
     throw ApiError.notFound('User not found');
   }
@@ -224,6 +224,7 @@ export const changePassword = asyncHandler(async (req: Request, res: Response) =
   // 5. Update password
   user.password = newPassword;
   user.passwordChangedAt = new Date();
+  user.$inc('sessionVersion', 1);
   await user.save();
 
   const secureCookie = env.JWT_COOKIE_SECURE ?? env.NODE_ENV === 'production';

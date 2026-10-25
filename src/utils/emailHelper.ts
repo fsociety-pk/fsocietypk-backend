@@ -5,8 +5,7 @@ import logger from './logger';
 const emailIsConfigured = Boolean(
   env.SMTP_HOST &&
   env.SMTP_USER &&
-  env.SMTP_PASSWORD &&
-  env.CHALLENGE_NOTIFICATION_EMAIL
+  env.SMTP_PASSWORD
 );
 
 const transporter = emailIsConfigured
@@ -80,5 +79,23 @@ export const sendChallengeSubmissionEmail = async ({
   } catch (error) {
     // Email is a secondary alert; a provider issue must not fail the challenge submission.
     logger.error('Could not send challenge submission email.', getSafeMailError(error));
+  }
+};
+
+/** Account verification is required: transport failure must fail registration. */
+export const sendVerificationEmail = async (email: string, code: string): Promise<void> => {
+  if (!transporter || !env.SMTP_USER) throw new Error('Email verification is temporarily unavailable. Please try again later.');
+  try {
+    await transporter.sendMail({
+      from: `Fsociety PK <${env.SMTP_USER}>`,
+      to: email,
+      subject: `${code} is your Fsociety PK verification code`,
+      text: `Welcome to Fsociety PK.\n\nYour verification code is: ${code}\n\nIt expires in 10 minutes. Never share this code. If you did not request an account, ignore this email.\n\nLearn. Practice. Share.`,
+      html: `<div style="background:#DDE3E8;color:#3A0F34;padding:40px;font-family:Arial,sans-serif;max-width:520px"><p style="font-weight:bold;letter-spacing:3px">FSOCIETY PK</p><h1>One last checkpoint.</h1><p>Enter this code to verify your email and join the community.</p><p style="font-size:36px;letter-spacing:10px;font-weight:bold;border-bottom:4px solid #EAAA00;padding-bottom:24px">${code}</p><p>Expires in 10 minutes. Never share this code.</p><p>If you didn’t request this account, you can ignore this email.</p></div>`,
+    });
+  } catch {
+    // Never log the OTP, recipient, SMTP credentials, or provider response body.
+    logger.error('Verification email delivery failed.');
+    throw new Error('We could not send your verification email. Please try again shortly.');
   }
 };

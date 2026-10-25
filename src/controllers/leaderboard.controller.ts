@@ -19,7 +19,7 @@ export const getLeaderboard = asyncHandler(async (req: Request, res: Response) =
     leaderboard = await User.find({})
       .sort({ score: -1, updatedAt: 1 })
       .limit(50)
-      .select('username avatar score country');
+      .select('username avatar score country solvedChallenges');
       
     // Add Rank
     leaderboard = leaderboard.map((user, index) => ({
@@ -28,7 +28,8 @@ export const getLeaderboard = asyncHandler(async (req: Request, res: Response) =
       username: user.username,
       avatar: user.avatar,
       score: user.score,
-      country: user.country
+      country: user.country,
+      solveCount: user.solvedChallenges.length
     }));
   } else {
     // Time-based aggregation from Submissions

@@ -4,6 +4,8 @@ import { IUser } from '../types';
 
 export interface IUserDocument extends Document {
   username: IUser['username'];
+  email?: string;
+  emailVerifiedAt?: Date;
   role: IUser['role'];
   avatar?: IUser['avatar'];
   bio?: IUser['bio'];
@@ -17,6 +19,7 @@ export interface IUserDocument extends Document {
   updatedAt: Date;
   password?: string;
   passwordChangedAt?: Date;
+  sessionVersion: number;
   comparePassword(password: string): Promise<boolean>;
 }
 
@@ -32,6 +35,8 @@ const userSchema = new Schema<IUserDocument>(
       maxlength: [30, 'Username cannot exceed 30 characters'],
       index: true,
     },
+    email: { type: String, trim: true, lowercase: true, unique: true, sparse: true, select: false },
+    emailVerifiedAt: { type: Date, select: false },
     password: {
       type: String,
       required: [true, 'Password is required'],
@@ -42,6 +47,7 @@ const userSchema = new Schema<IUserDocument>(
       type: Date,
       select: false,
     },
+    sessionVersion: { type: Number, default: 0, select: false },
     role: {
       type: String,
       enum: ['user', 'admin'],
@@ -102,7 +108,7 @@ const userSchema = new Schema<IUserDocument>(
 
 // ── Password Hashing ──────────────────────────────────────────────
 userSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
+  if (!this.isModified('password') || this.$locals.passwordIsHashed) return next();
 
   try {
     const salt = await bcrypt.genSalt(10);

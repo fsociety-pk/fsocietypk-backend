@@ -1,0 +1,14 @@
+const assert = require('node:assert/strict');
+const { registerSchema, loginSchema, avatarSchema } = require('../dist/validators/auth.validator');
+const { detectSQLInjection } = require('../dist/utils/sqlInjectionDetector');
+assert(!registerSchema.safeParse({ username: 'sample', password: 'ValidSample1!' }).success);
+const good = registerSchema.parse({ email: ' User@Example.com ', username: 'SAMPLE', password: 'Valid;Sample1!' });
+assert.equal(good.email, 'user@example.com');
+assert.equal(good.username, 'sample');
+assert(!registerSchema.safeParse({ ...good, password: 'weak' }).success);
+assert.equal(loginSchema.parse({ username: ' USER@EXAMPLE.COM ', password: 'test' }).username, 'user@example.com');
+assert(avatarSchema.safeParse('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=').success);
+for (const value of ['data:image/svg+xml;base64,PHN2Zz4=', 'javascript:alert(1)', 'data:image/png;base64,YWJjZGVmZ2hpamts', 'data:image/png;base64,' + 'A'.repeat(710000)]) assert(!avatarSchema.safeParse(value).success);
+for (let i = 0; i < 3; i++) assert(detectSQLInjection("' OR '1'='1"));
+for (const value of ['javascript_fan', 'scriptwriter', 'name--here', 'semi;colon']) assert(!detectSQLInjection(value));
+console.log('PASS: auth normalization/requirements, raster image bounds/types, repeatable payload detection and false-positive cases.');
