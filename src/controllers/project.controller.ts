@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import { Project } from '../models/Project';
 import mongoose from 'mongoose';
 import { z } from 'zod';
+import { sendSubmissionEmail } from '../utils/emailHelper';
 
 const httpUrlOrEmpty = z.string().max(2048).refine((value) => {
   if (!value) return true;
@@ -81,6 +82,11 @@ export const createProject = async (req: Request, res: Response) => {
     }
 
     const project = await Project.create(parsed.data);
+    await sendSubmissionEmail({
+      contentType: 'project',
+      title: project.title,
+      submitterId: req.user!._id,
+    });
     return res.status(201).json({
       success: true,
       data: project,

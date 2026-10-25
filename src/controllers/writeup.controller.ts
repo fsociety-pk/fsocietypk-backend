@@ -5,6 +5,7 @@ import { getUserChallengeProgress } from '../utils/challengeProgress';
 import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
+import { sendSubmissionEmail } from '../utils/emailHelper';
 
 /**
  * @desc    Submit a new writeup for a challenge
@@ -51,6 +52,12 @@ export const submitWriteup = asyncHandler(async (req: Request, res: Response) =>
     title,
     content,
     status: 'pending',
+  });
+
+  await sendSubmissionEmail({
+    contentType: 'writeup',
+    title: writeup.title,
+    submitterId: userId,
   });
 
   const populatedWriteup = await writeup.populate([

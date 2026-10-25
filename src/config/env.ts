@@ -39,13 +39,13 @@ const envSchema = z.object({
   ADMIN_PASSWORD: z.string().optional(),
   ADMIN_USERNAME: z.string().optional(),
 
-  // Optional SMTP settings for admin challenge submission alerts
+  // Optional SMTP settings for admin submission alerts (all content types)
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().min(1).max(65535).default(465),
   SMTP_SECURE: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
-  CHALLENGE_NOTIFICATION_EMAIL: z.string().email().optional(),
+  CHALLENGE_NOTIFICATION_EMAIL: z.string().email().optional(), // Shared recipient for challenges, writeups, resources and projects
 
   // Logging
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'http', 'debug']).default('debug'),

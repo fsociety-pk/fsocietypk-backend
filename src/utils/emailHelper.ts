@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { env } from '../config/env';
+import { User } from '../models/User';
 import logger from './logger';
 
 const emailIsConfigured = Boolean(
@@ -35,7 +36,7 @@ const getSafeMailError = (error: unknown): { code?: string; responseCode?: numbe
 /** Check SMTP connectivity and authentication without sending a message. */
 export const verifyChallengeEmailTransport = async (): Promise<void> => {
   if (!transporter) {
-    logger.warn('SMTP status: NOT CONFIGURED — challenge email notifications are disabled.');
+    logger.warn('SMTP status: NOT CONFIGURED — email notifications are disabled.');
     return;
   }
 
@@ -45,7 +46,52 @@ export const verifyChallengeEmailTransport = async (): Promise<void> => {
     await transporter.verify();
     logger.info('SMTP status: READY — server connection and authentication succeeded.');
   } catch (error) {
-    logger.error('SMTP status: FAILED — challenge emails will not send until this is fixed.', getSafeMailError(error));
+    logger.error('SMTP status: FAILED — emails will not send until this is fixed.', getSafeMailError(error));
+  }
+};
+
+export const sendSubmissionEmail = async ({
+  contentType,
+  title,
+  submitterUsername,
+  submitterId,
+}: {
+  contentType: 'challenge' | 'writeup' | 'resource' | 'project';
+  title: string;
+  submitterUsername?: string;
+  submitterId?: string;
+}): Promise<void> => {
+  if (!transporter || !env.CHALLENGE_NOTIFICATION_EMAIL || !env.SMTP_USER) {
+    logger.debug(`Skipped ${contentType} email because SMTP settings are incomplete.`);
+    return;
+  }
+
+  try {
+    const submitter = !submitterUsername && submitterId
+      ? await User.findById(submitterId).select('username')
+      : null;
+    const username = submitterUsername || submitter?.username || 'A user';
+    const label = contentType.charAt(0).toUpperCase() + contentType.slice(1);
+    const isPublished = contentType === 'project';
+    const result = await transporter.sendMail({
+      from: `FsocietyPK Notifications <${env.SMTP_USER}>`,
+      to: env.CHALLENGE_NOTIFICATION_EMAIL,
+      subject: isPublished ? 'New project published' : `New ${contentType} submission awaiting review`,
+      text: [
+        isPublished
+          ? 'A new project has been published.'
+          : `A new ${contentType} has been submitted and is waiting for review.`,
+        '',
+        `${label}: ${title}`,
+        `Submitted by: ${username}`,
+        '',
+        `Open the admin dashboard to ${isPublished ? 'view' : 'review'} it.`,
+      ].join('\n'),
+    });
+    logger.info(`${label} submission email sent successfully.`, { messageId: result.messageId });
+  } catch (error) {
+    // Email is a secondary alert; lookup or provider issues must not fail the submission.
+    logger.error(`Could not send ${contentType} submission email.`, getSafeMailError(error));
   }
 };
 
@@ -55,32 +101,11 @@ export const sendChallengeSubmissionEmail = async ({
 }: {
   challengeTitle: string;
   submitterUsername: string;
-}): Promise<void> => {
-  if (!transporter || !env.CHALLENGE_NOTIFICATION_EMAIL || !env.SMTP_USER) {
-    logger.debug('Skipped challenge email because SMTP settings are incomplete.');
-    return;
-  }
-
-  try {
-    const result = await transporter.sendMail({
-      from: `FsocietyPK Notifications <${env.SMTP_USER}>`,
-      to: env.CHALLENGE_NOTIFICATION_EMAIL,
-      subject: 'New challenge submission awaiting review',
-      text: [
-        'A new challenge has been submitted and is waiting for review.',
-        '',
-        `Challenge: ${challengeTitle}`,
-        `Submitted by: ${submitterUsername}`,
-        '',
-        'Open the admin dashboard to review it.',
-      ].join('\n'),
-    });
-    logger.info('Challenge submission email sent successfully.', { messageId: result.messageId });
-  } catch (error) {
-    // Email is a secondary alert; a provider issue must not fail the challenge submission.
-    logger.error('Could not send challenge submission email.', getSafeMailError(error));
-  }
-};
+}): Promise<void> => sendSubmissionEmail({
+  contentType: 'challenge',
+  title: challengeTitle,
+  submitterUsername,
+});
 
 /** Account verification is required: transport failure must fail registration. */
 export const sendVerificationEmail = async (email: string, code: string): Promise<void> => {

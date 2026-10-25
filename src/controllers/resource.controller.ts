@@ -3,6 +3,7 @@ import { Resource } from '../models/Resource';
 import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
+import { sendSubmissionEmail } from '../utils/emailHelper';
 
 /**
  * @desc    Submit a new learning resource
@@ -29,6 +30,12 @@ export const submitResource = asyncHandler(async (req: Request, res: Response) =
     category: category.toLowerCase(),
     createdBy: req.user!._id,
     isApproved: false,
+  });
+
+  await sendSubmissionEmail({
+    contentType: 'resource',
+    title: resource.title,
+    submitterId: req.user!._id,
   });
 
   res.status(201).json(ApiResponse.created('Resource submitted successfully for review', resource));
