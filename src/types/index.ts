@@ -66,6 +66,7 @@ export interface IChallenge {
   title: string
   slug: string
   description: string
+  challengeUrl?: string
   category: ChallengeCategory
   difficulty: ChallengeDifficulty
   points: number

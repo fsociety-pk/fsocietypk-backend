@@ -4,6 +4,7 @@ import { Challenge } from '../models/Challenge';
 import { Submission } from '../models/Submission';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
+import { challengeProgressPipeline } from '../utils/challengeProgress';
 
 /**
  * @desc    Get detailed platform analytics
@@ -39,7 +40,11 @@ export const getAnalytics = asyncHandler(async (_req: Request, res: Response) =>
     Promise.all([
       User.countDocuments(),
       Challenge.countDocuments({ status: 'approved' }),
-      Submission.countDocuments({ isCorrect: true })
+      Submission.aggregate([
+        ...challengeProgressPipeline(),
+        { $match: { isSolved: true } },
+        { $count: 'count' },
+      ]).then(rows => rows[0]?.count ?? 0)
     ]).then(([users, challenges, solves]) => ({
       totalUsers: users,
       totalChallenges: challenges,
@@ -61,10 +66,11 @@ export const getAnalytics = asyncHandler(async (_req: Request, res: Response) =>
 
     // 3. Submission Trend (last 30 days)
     Submission.aggregate([
-      { $match: { timestamp: { $gte: thirtyDaysAgo }, isCorrect: true } },
+      ...challengeProgressPipeline(),
+      { $match: { completedAt: { $gte: thirtyDaysAgo }, isSolved: true } },
       {
         $group: {
-          _id: { $dateToString: { format: "%Y-%m-%d", date: "$timestamp" } },
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$completedAt" } },
           solves: { $sum: 1 }
         }
       },
@@ -73,26 +79,29 @@ export const getAnalytics = asyncHandler(async (_req: Request, res: Response) =>
     ]),
 
     // 4. Top Challenges
-    Challenge.find({ status: 'approved' })
-      .sort({ solveCount: -1 })
-      .limit(5)
-      .select('title solveCount category'),
+    Challenge.aggregate([
+      { $match: { status: 'approved' } },
+      { $lookup: {
+        from: 'submissions', localField: '_id', foreignField: 'challengeId',
+        pipeline: [
+          ...challengeProgressPipeline(),
+          { $match: { isSolved: true } },
+          { $count: 'count' },
+        ],
+        as: 'solves',
+      } },
+      { $project: { title: 1, category: 1, solveCount: { $ifNull: [{ $first: '$solves.count' }, 0] } } },
+      { $sort: { solveCount: -1, title: 1 } },
+      { $limit: 5 },
+    ]),
 
     // 5. Category Distribution
     Submission.aggregate([
-      { $match: { isCorrect: true } },
-      {
-        $lookup: {
-          from: 'challenges',
-          localField: 'challengeId',
-          foreignField: '_id',
-          as: 'challengeInfo'
-        }
-      },
-      { $unwind: '$challengeInfo' },
+      ...challengeProgressPipeline(),
+      { $match: { isSolved: true } },
       {
         $group: {
-          _id: '$challengeInfo.category',
+          _id: '$challenge.category',
           count: { $sum: 1 }
         }
       },
@@ -101,19 +110,11 @@ export const getAnalytics = asyncHandler(async (_req: Request, res: Response) =>
 
     // 6. Difficulty Distribution
     Submission.aggregate([
-        { $match: { isCorrect: true } },
-        {
-          $lookup: {
-            from: 'challenges',
-            localField: 'challengeId',
-            foreignField: '_id',
-            as: 'challengeInfo'
-          }
-        },
-        { $unwind: '$challengeInfo' },
+        ...challengeProgressPipeline(),
+        { $match: { isSolved: true } },
         {
           $group: {
-            _id: '$challengeInfo.difficulty',
+            _id: '$challenge.difficulty',
             count: { $sum: 1 }
           }
         },

@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { IChallenge } from '../types';
+import { challengeUrlSchema } from '../schemas/challenge.schema';
 
 export interface IChallengeDocument
   extends Omit<IChallenge, '_id' | 'createdAt' | 'updatedAt' | 'author' | 'createdBy'>,
@@ -39,6 +40,15 @@ const challengeSchema = new Schema<IChallengeDocument>(
       type: String,
       enum: ['web', 'pwn', 'rev', 'crypto', 'forensics', 'osint', 'misc', 'stego', 'network', 'mobile'],
       required: [true, 'Category is required'],
+    },
+    challengeUrl: {
+      type: String,
+      trim: true,
+      maxlength: 2048,
+      validate: {
+        validator: (value: string) => challengeUrlSchema.safeParse(value).success,
+        message: 'Challenge URL must be a valid http:// or https:// URL without embedded credentials',
+      },
     },
     difficulty: {
       type: String,

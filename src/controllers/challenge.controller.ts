@@ -14,6 +14,9 @@ import { sendChallengeSubmissionEmail } from '../utils/emailHelper';
 import { deleteFromR2, getSignedDownloadUrl, uploadToR2 } from '../lib/r2';
 import { MAX_CHALLENGE_FILES } from '../middleware/challengeUpload.middleware';
 import logger from '../utils/logger';
+import { challengeProgressPipeline, getUserChallengeProgress } from '../utils/challengeProgress';
+import mongoose from 'mongoose';
+import { challengeUrlSchema } from '../schemas/challenge.schema';
 
 /** Validate flag format */
 const FLAG_REGEX = /^fsociety\{.+\}$/i;
@@ -73,22 +76,24 @@ const cleanupR2Uploads = async (fileKeys: string[]): Promise<void> => {
  */
 export const getChallenges = asyncHandler(async (req: Request, res: Response) => {
   const challenges = await Challenge.find({ isActive: true, status: 'approved' })
-    .select('-flag')
+    .select('+flags')
     .populate('createdBy', 'username')
     .sort({ difficulty: 1, points: 1 });
 
-  // Get current user's correct solves
-  const userSolves = await Submission.find({
-    userId: req.user!._id,
-    isCorrect: true,
-  }).select('challengeId');
-
-  const solvedIds = userSolves.map((s) => s.challengeId.toString());
-
-  const challengesWithStatus = challenges.map((c: any) => ({
-    ...c.toObject(),
-    isSolved: solvedIds.includes(c._id.toString()),
-  }));
+  const progress = await getUserChallengeProgress(req.user!._id);
+  const progressById = new Map(progress.map(p => [p.challenge._id.toString(), p]));
+  const challengesWithStatus = challenges.map(c => {
+    const { flags, flag: _flag, ...publicChallenge } = c.toObject();
+    const current = progressById.get(c._id.toString());
+    return {
+      ...publicChallenge,
+      totalFlags: flags?.length || 1,
+      completedFlags: current?.completedFlags ?? 0,
+      completedSequences: current?.completedSequences.filter(n => n > 0) ?? [],
+      isSolved: current?.isSolved ?? false,
+      completedAt: current?.completedAt ?? null,
+    };
+  });
 
   res.status(200).json(ApiResponse.ok('Challenges retrieved', challengesWithStatus));
 });
@@ -100,25 +105,24 @@ export const getChallenges = asyncHandler(async (req: Request, res: Response) =>
  */
 export const getChallengeById = asyncHandler(async (req: Request, res: Response) => {
   const challenge = await Challenge.findById(req.params.id)
-    .select('-flag')
+    .select('+flags')
     .populate('createdBy', 'username');
 
   if (!challenge || !challenge.isActive || challenge.status !== 'approved') {
     throw ApiError.notFound('Challenge not found');
   }
 
-  const solved = await Submission.findOne({
-    userId: req.user!._id,
-    challengeId: req.params.id,
-    isCorrect: true,
-    pointsAwarded: { $gt: 0 },
-  }).sort({ timestamp: 1 });
+  const [progress] = await getUserChallengeProgress(req.user!._id, req.params.id);
+  const { flags, flag: _flag, ...publicChallenge } = challenge.toObject();
 
   res.status(200).json(
     ApiResponse.ok('Challenge detail retrieved', {
-      ...challenge.toObject(),
-      isSolved: !!solved,
-      completedAt: solved?.timestamp ?? null,
+      ...publicChallenge,
+      totalFlags: flags?.length || 1,
+      completedFlags: progress?.completedFlags ?? 0,
+      completedSequences: progress?.completedSequences.filter(n => n > 0) ?? [],
+      isSolved: progress?.isSolved ?? false,
+      completedAt: progress?.completedAt ?? null,
     })
   );
 });
@@ -195,13 +199,16 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
     const solvedSet = new Set(
       solvedSteps
         .map((s: any) => s.sequenceNumber)
-        .filter((n: unknown): n is number => typeof n === 'number')
+        .filter((n: unknown): n is number => typeof n === 'number' && orderedFlags.some(f => f.sequence === n))
     );
 
     const nextFlag = orderedFlags.find((f: any) => !solvedSet.has(f.sequence));
 
     if (!nextFlag) {
-      return res.status(200).json(ApiResponse.ok('Challenge already solved!', { correct: true }));
+      const [progress] = await getUserChallengeProgress(req.user!._id, challengeId);
+      return res.status(200).json(ApiResponse.ok('Challenge already solved!', {
+        correct: true, completed: true, points: 0, completedAt: progress?.completedAt,
+      }));
     }
 
     const isCorrect = await challenge.compareFlag(normalizedFlag, nextFlag.sequence);
@@ -249,10 +256,6 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
     );
 
     if (!scoreAward) {
-      await Submission.findOneAndUpdate(
-        { userId: req.user!._id, challengeId, isCorrect: true, sequenceNumber: nextFlag.sequence },
-        { $set: { isCorrect: false, pointsAwarded: 0 } }
-      );
       return res.status(200).json(ApiResponse.ok('Challenge already solved!', { correct: true, completed: true }));
     }
 
@@ -341,20 +344,15 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
 export const getRecentSolvers = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const submissions = await Submission.find({
-    challengeId: id,
-    isCorrect: true,
-  })
-    .sort({ timestamp: -1 })
-    .limit(5)
-    .populate('userId', 'username avatar score');
-
-  const solvers = submissions.map((s: any) => ({
-    username: s.userId.username,
-    avatar: s.userId.avatar,
-    score: s.pointsAwarded,
-    timestamp: s.timestamp || s.createdAt,
-  }));
+  const solvers = await Submission.aggregate([
+    ...challengeProgressPipeline({ challengeId: new mongoose.Types.ObjectId(id) }),
+    { $match: { isSolved: true } },
+    { $sort: { completedAt: -1 } },
+    { $lookup: { from: 'users', localField: '_id.userId', foreignField: '_id', as: 'user' } },
+    { $unwind: '$user' },
+    { $limit: 5 },
+    { $project: { _id: 0, username: '$user.username', avatar: '$user.avatar', score: '$pointsAwarded', timestamp: '$completedAt' } },
+  ]);
 
   res.status(200).json(ApiResponse.ok('Recent solvers retrieved', solvers));
 });
@@ -366,6 +364,10 @@ export const getRecentSolvers = asyncHandler(async (req: Request, res: Response)
  */
 export const createChallenge = asyncHandler(async (req: Request, res: Response) => {
   const { title, description, category, difficulty, flag } = req.body;
+  const challengeUrl = challengeUrlSchema.safeParse(req.body.challengeUrl);
+  if (!challengeUrl.success) {
+    throw ApiError.badRequest('Invalid challenge URL', challengeUrl.error.issues);
+  }
   const hints = parseArrayField(req.body.hints, 'Hints');
   const flags = parseArrayField(req.body.flags, 'Flags') as Array<{ sequence: number; value: string }> | undefined;
   const attachments = parseArrayField(req.body.attachments, 'Attachments');
@@ -479,6 +481,7 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
   const challengeData: any = {
     title: title.trim(),
     description: description.trim(),
+    challengeUrl: challengeUrl.data || undefined,
     category: category.toLowerCase(),
     difficulty: difficulty.toLowerCase(),
     hints: parsedHints,

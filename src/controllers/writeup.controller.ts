@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import { Writeup } from '../models/Writeup';
 import { Challenge } from '../models/Challenge';
-import { Submission } from '../models/Submission';
+import { getUserChallengeProgress } from '../utils/challengeProgress';
 import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -27,13 +27,9 @@ export const submitWriteup = asyncHandler(async (req: Request, res: Response) =>
   }
 
   // Check if user has solved the challenge
-  const userSolve = await Submission.findOne({
-    userId,
-    challengeId,
-    isCorrect: true,
-  });
+  const [userSolve] = await getUserChallengeProgress(userId, challengeId);
 
-  if (!userSolve) {
+  if (!userSolve?.isSolved) {
     throw ApiError.forbidden('You must solve this challenge first before submitting a writeup');
   }
 

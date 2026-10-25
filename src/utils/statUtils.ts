@@ -1,8 +1,8 @@
-import { Submission } from '../models/Submission';
 import { Challenge } from '../models/Challenge';
 import mongoose from 'mongoose';
+import { ChallengeProgress, getUserChallengeProgress } from './challengeProgress';
 
-export const calculateProficiencyIndex = async (userId: string | mongoose.Types.ObjectId) => {
+export const calculateProficiencyIndex = async (userId: string | mongoose.Types.ObjectId, progress?: ChallengeProgress[]) => {
   // Total challenges per category
   const totalInCategory = await Challenge.aggregate([
     { $match: { status: 'approved' } },
@@ -10,24 +10,13 @@ export const calculateProficiencyIndex = async (userId: string | mongoose.Types.
   ]);
 
   // User's solved challenges per category
-  const solvedInCategory = await Submission.aggregate([
-    { $match: { userId: new mongoose.Types.ObjectId(userId.toString()), isCorrect: true } },
-    {
-      $lookup: {
-        from: 'challenges',
-        localField: 'challengeId',
-        foreignField: '_id',
-        as: 'challenge'
-      }
-    },
-    { $unwind: '$challenge' },
-    { $group: { _id: '$challenge.category', solved: { $sum: 1 } } }
-  ]);
+  const completed = (progress ?? await getUserChallengeProgress(userId))
+    .filter(p => p.isSolved && p.challenge.status === 'approved');
 
   // Combined into a readable format - only include categories that have at least one challenge
   const stats = totalInCategory.map(t => {
     const cat = t._id;
-    const solved = solvedInCategory.find(s => s._id === cat)?.solved || 0;
+    const solved = completed.filter(p => p.challenge.category === cat).length;
     return {
       category: cat,
       solved,

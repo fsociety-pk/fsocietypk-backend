@@ -51,9 +51,9 @@ async function run() {
   const completedAt = new Date('2025-01-02T12:00:00Z');
   const challenge = { isActive: true, status: 'approved', toObject: () => ({ title: 'Recorded solve' }) };
   Challenge.findById = () => ({ select: () => ({ populate: async () => challenge }) });
-  let recordedSolve = { timestamp: completedAt };
-  Submission.findOne = query => { assert.deepEqual(query.pointsAwarded, { $gt: 0 }); return { sort: async () => recordedSolve }; };
-  const req = { params: { id: 'fixture-challenge' }, user: { _id: 'fixture-user' } };
+  let recordedSolve = { completedAt, isSolved: true, completedFlags: 1, completedSequences: [0] };
+  Submission.aggregate = async () => recordedSolve ? [recordedSolve] : [];
+  const req = { params: { id: '507f1f77bcf86cd799439022' }, user: { _id: '507f1f77bcf86cd799439011' } };
   const solved = await invoke(getChallengeById, req);
   assert.equal(solved.body.data.completedAt, completedAt);
   assert.equal(solved.body.data.isSolved, true);

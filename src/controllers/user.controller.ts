@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { User } from '../models/User';
-import { Submission } from '../models/Submission';
+import { getUserChallengeProgress, profileSolveData } from '../utils/challengeProgress';
 import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
@@ -16,12 +16,7 @@ import { env } from '../config/env';
 export const getProfile = asyncHandler(async (req: Request, res: Response) => {
   const userId = req.user!._id;
 
-  // 1. Fetch user and populate solved challenges
-  const user = await User.findById(userId)
-    .populate({
-      path: 'solvedChallenges',
-      select: 'title category points difficulty slug'
-    });
+  const user = await User.findById(userId);
 
   if (!user) {
     throw ApiError.notFound('User not found');
@@ -32,21 +27,14 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
   const rank = await User.countDocuments({ score: { $gt: user.score } }) + 1;
 
   // 3. Fetch recent solve history (from Submissions)
-  const solveHistory = await Submission.find({ 
-    userId: userId, 
-    isCorrect: true 
-  })
-    .sort({ timestamp: -1 })
-    .limit(20)
-    .populate('challengeId', 'title category points');
-
-  // 4. Calculate Proficiency Index
-  const proficiencyIndex = await calculateProficiencyIndex(userId);
+  const progress = await getUserChallengeProgress(userId);
+  const solveData = profileSolveData(progress);
+  const proficiencyIndex = await calculateProficiencyIndex(userId, progress);
 
   const profileData = {
     ...user.toObject(),
     rank,
-    solveHistory,
+    ...solveData,
     proficiencyIndex
   };
 
@@ -62,13 +50,7 @@ export const getPublicProfile = asyncHandler(async (req: Request, res: Response)
   const { username } = req.params;
 
   // 1. Fetch user by username
-  const user = await User.findOne({ 
-    username: username.toLowerCase() 
-  })
-    .populate({
-      path: 'solvedChallenges',
-      select: 'title category points difficulty slug'
-    });
+  const user = await User.findOne({ username: username.toLowerCase() });
 
   if (!user) {
     throw ApiError.notFound('User not found');
@@ -83,16 +65,9 @@ export const getPublicProfile = asyncHandler(async (req: Request, res: Response)
   const rank = await User.countDocuments({ score: { $gt: user.score } }) + 1;
 
   // 4. Fetch recent solve history (from Submissions)
-  const solveHistory = await Submission.find({ 
-    userId: user._id, 
-    isCorrect: true 
-  })
-    .sort({ timestamp: -1 })
-    .limit(20)
-    .populate('challengeId', 'title category points');
-
-  // 5. Calculate Proficiency Index
-  const proficiencyIndex = await calculateProficiencyIndex(user._id);
+  const progress = await getUserChallengeProgress(user._id);
+  const solveData = profileSolveData(progress);
+  const proficiencyIndex = await calculateProficiencyIndex(user._id, progress);
 
   // 6. Return only public data
   const profileData = {
@@ -105,9 +80,8 @@ export const getPublicProfile = asyncHandler(async (req: Request, res: Response)
     score: user.score,
     role: user.role,
     createdAt: user.createdAt,
-    solvedChallenges: user.solvedChallenges,
     rank,
-    solveHistory,
+    ...solveData,
     proficiencyIndex
   };
 
@@ -158,32 +132,20 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
   // 3. Save updated user
   await user.save();
 
-  // 4. Fetch updated user with solvedChallenges populated
-  const updatedUser = await User.findById(userId)
-    .populate({
-      path: 'solvedChallenges',
-      select: 'title category points difficulty slug'
-    });
+  const updatedUser = await User.findById(userId);
 
   // 5. Calculate Rank
   const rank = await User.countDocuments({ score: { $gt: updatedUser!.score } }) + 1;
 
   // 6. Fetch recent solve history
-  const solveHistory = await Submission.find({ 
-    userId: userId, 
-    isCorrect: true 
-  })
-    .sort({ timestamp: -1 })
-    .limit(20)
-    .populate('challengeId', 'title category points');
-
-  // 7. Calculate Proficiency Index
-  const proficiencyIndex = await calculateProficiencyIndex(userId);
+  const progress = await getUserChallengeProgress(userId);
+  const solveData = profileSolveData(progress);
+  const proficiencyIndex = await calculateProficiencyIndex(userId, progress);
 
   const profileData = {
     ...updatedUser!.toObject(),
     rank,
-    solveHistory,
+    ...solveData,
     proficiencyIndex
   };
 

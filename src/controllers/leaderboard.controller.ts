@@ -3,6 +3,7 @@ import { User } from '../models/User';
 import { Submission } from '../models/Submission';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
+import { challengeProgressPipeline } from '../utils/challengeProgress';
 
 /**
  * @desc    Get leaderboard data with filters (all-time, weekly, monthly)
@@ -19,8 +20,15 @@ export const getLeaderboard = asyncHandler(async (req: Request, res: Response) =
     leaderboard = await User.find({})
       .sort({ score: -1, updatedAt: 1 })
       .limit(50)
-      .select('username avatar score country solvedChallenges');
+      .select('username avatar score country');
       
+    const counts = await Submission.aggregate([
+      ...challengeProgressPipeline({ userId: { $in: leaderboard.map(user => user._id) } }),
+      { $match: { isSolved: true } },
+      { $group: { _id: '$_id.userId', count: { $sum: 1 } } },
+    ]);
+    const countByUser = new Map(counts.map(row => [row._id.toString(), row.count]));
+
     // Add Rank
     leaderboard = leaderboard.map((user, index) => ({
       rank: index + 1,
@@ -29,7 +37,7 @@ export const getLeaderboard = asyncHandler(async (req: Request, res: Response) =
       avatar: user.avatar,
       score: user.score,
       country: user.country,
-      solveCount: user.solvedChallenges.length
+      solveCount: countByUser.get(user._id.toString()) ?? 0
     }));
   } else {
     // Time-based aggregation from Submissions
@@ -43,15 +51,11 @@ export const getLeaderboard = asyncHandler(async (req: Request, res: Response) =
     }
 
     leaderboard = await Submission.aggregate([
-      {
-        $match: {
-          isCorrect: true,
-          timestamp: { $gte: startDate }
-        }
-      },
+      ...challengeProgressPipeline(),
+      { $match: { isSolved: true, completedAt: { $gte: startDate } } },
       {
         $group: {
-          _id: '$userId',
+          _id: '$_id.userId',
           score: { $sum: '$pointsAwarded' },
           solveCount: { $sum: 1 },
           lastSolveAt: { $max: '$timestamp' }
