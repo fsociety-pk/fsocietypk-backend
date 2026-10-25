@@ -10,6 +10,12 @@ const envSchema = z.object({
   // Database
   MONGODB_URI: z.string().min(1, 'MONGODB_URI is required'),
 
+  // Private challenge file storage
+  R2_ACCOUNT_ID: z.string().min(1, 'R2_ACCOUNT_ID is required'),
+  R2_ACCESS_KEY_ID: z.string().min(1, 'R2_ACCESS_KEY_ID is required'),
+  R2_SECRET_ACCESS_KEY: z.string().min(1, 'R2_SECRET_ACCESS_KEY is required'),
+  R2_BUCKET: z.string().min(1, 'R2_BUCKET is required'),
+
   // JWT
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('7d'),
@@ -58,6 +64,19 @@ const envSchema = z.object({
 })
 
 // ── Parse & validate ──────────────────────────────────────────────
+const requiredR2Variables = [
+  'R2_ACCOUNT_ID',
+  'R2_ACCESS_KEY_ID',
+  'R2_SECRET_ACCESS_KEY',
+  'R2_BUCKET',
+] as const
+const missingR2Variables = requiredR2Variables.filter((name) => !process.env[name]?.trim())
+
+if (missingR2Variables.length > 0) {
+  console.error(`Missing required environment variables: ${missingR2Variables.join(', ')}`)
+  throw new Error('R2 environment configuration is incomplete')
+}
+
 const _parsed = envSchema.safeParse(process.env)
 
 if (!_parsed.success) {

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as challengeController from '../controllers/challenge.controller';
 import { protect } from '../middleware/auth.middleware';
+import { uploadChallengeAttachments } from '../middleware/challengeUpload.middleware';
 import rateLimit from 'express-rate-limit';
 
 const router = Router();
@@ -24,8 +25,9 @@ router.get('/my-submissions', challengeController.mySubmissions);
 router.get('/', challengeController.getChallenges);
 router.get('/:id', challengeController.getChallengeById);
 router.get('/:id/solvers', challengeController.getRecentSolvers);
+router.get('/:id/attachments/:attachmentId/download', challengeController.downloadAttachment);
 
 // Challenge creation (any authenticated user)
-router.post('/', challengeController.createChallenge);
+router.post('/', uploadChallengeAttachments, challengeController.createChallenge);
 
 export default router;

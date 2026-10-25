@@ -6,6 +6,7 @@ import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { createNotification, notificationTemplates } from '../utils/notificationHelper';
+import { deleteFromR2 } from '../lib/r2';
 
 /**
  * @desc    Get system overview stats
@@ -177,8 +178,14 @@ export const updateChallengeStatus = asyncHandler(async (req: Request, res: Resp
 export const deleteChallenge = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 
-  const challenge = await Challenge.findByIdAndDelete(id);
+  const challenge = await Challenge.findById(id);
   if (!challenge) throw ApiError.notFound('Challenge not found');
+
+  const fileKeys = challenge.attachments
+    .filter((attachment) => typeof attachment !== 'string' && !!attachment.fileKey)
+    .map((attachment) => typeof attachment === 'string' ? '' : attachment.fileKey);
+  await Promise.all(fileKeys.map((fileKey) => deleteFromR2(fileKey)));
+  await challenge.deleteOne();
 
   // Cleanup submissions
   await Submission.deleteMany({ challengeId: id });

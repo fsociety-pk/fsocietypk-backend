@@ -83,13 +83,8 @@ const challengeSchema = new Schema<IChallengeDocument>(
         size: Number,
       },
     ],
-    // New "attachments" field (URLs or file names)
-    attachments: [
-      {
-        type: String,
-        trim: true,
-      },
-    ],
+    // Mixed keeps legacy URL strings readable alongside R2 file metadata.
+    attachments: [Schema.Types.Mixed],
     solveCount: {
       type: Number,
       default: 0,

@@ -52,6 +52,15 @@ export interface IFlag {
   value: string
 }
 
+export interface IChallengeAttachment {
+  _id: string
+  fileKey: string
+  originalName: string
+  size: number
+  sha256: string
+  contentType: string
+}
+
 export interface IChallenge {
   _id: string
   title: string
@@ -64,7 +73,7 @@ export interface IChallenge {
   flags?: IFlag[]  // New: for multi-flag story-based challenges
   hints: IHint[]
   files: IFile[]
-  attachments: string[]
+  attachments: Array<string | IChallengeAttachment>
   solveCount: number
   isActive: boolean
   status: ChallengeStatus

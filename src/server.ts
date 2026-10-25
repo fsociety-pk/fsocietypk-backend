@@ -5,6 +5,7 @@ import { env } from './config/env'
 import logger from './utils/logger'
 import { initSocket } from './socket'
 import { verifyChallengeEmailTransport } from './utils/emailHelper'
+import { verifyR2Connection } from './lib/r2'
 
 const PORT = env.PORT
 const HOST = env.HOST
@@ -21,6 +22,16 @@ const safeErrorDetails = (error: unknown) => {
 const startServer = async () => {
   try {
     logger.info('Startup: environment configuration validated.')
+
+    const r2Status = await verifyR2Connection()
+    if (r2Status.reachable) {
+      logger.info('R2 storage check: configured and reachable.')
+    } else {
+      logger.error('R2 storage check failed: credentials/bucket may be invalid or unreachable.', {
+        ...(r2Status.errorCode && { code: r2Status.errorCode }),
+        ...(r2Status.httpStatus && { httpStatus: r2Status.httpStatus }),
+      })
+    }
 
     // Connect to MongoDB
     await connectDB()

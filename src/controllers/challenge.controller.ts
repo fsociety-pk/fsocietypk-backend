@@ -1,15 +1,70 @@
 import { Request, Response } from 'express';
-import { Challenge } from '../models/Challenge';
+import { createHash, randomUUID } from 'crypto';
+import { createReadStream } from 'fs';
+import { basename, extname } from 'path';
+import { Challenge, IChallengeDocument } from '../models/Challenge';
 import { Submission } from '../models/Submission';
 import { User } from '../models/User';
+import type { IChallengeAttachment } from '../types';
 import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { createNotification, notificationTemplates } from '../utils/notificationHelper';
 import { sendChallengeSubmissionEmail } from '../utils/emailHelper';
+import { deleteFromR2, getSignedDownloadUrl, uploadToR2 } from '../lib/r2';
+import { MAX_CHALLENGE_FILES } from '../middleware/challengeUpload.middleware';
+import logger from '../utils/logger';
 
 /** Validate flag format */
 const FLAG_REGEX = /^fsociety\{.+\}$/i;
+const CHALLENGE_FILE_CONTENT_TYPES: Record<string, string> = {
+  '.zip': 'application/zip',
+  '.7z': 'application/x-7z-compressed',
+  '.tar': 'application/x-tar',
+  '.gz': 'application/gzip',
+  '.tgz': 'application/gzip',
+};
+
+const parseArrayField = (value: unknown, name: string): unknown[] | undefined => {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) return value;
+  if (typeof value === 'string') {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      if (Array.isArray(parsed)) return parsed;
+    } catch {
+      throw ApiError.badRequest(`${name} must be a valid array`);
+    }
+  }
+  throw ApiError.badRequest(`${name} must be an array`);
+};
+
+const getFileSha256 = (filePath: string): Promise<string> =>
+  new Promise((resolve, reject) => {
+    const hash = createHash('sha256');
+    const stream = createReadStream(filePath);
+    stream.on('data', (chunk) => hash.update(chunk));
+    stream.on('error', reject);
+    stream.on('end', () => resolve(hash.digest('hex')));
+  });
+
+const cleanOriginalFileName = (fileName: string): string => {
+  const cleaned = basename(fileName.replace(/\\/g, '/'))
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    .trim();
+  const extension = extname(cleaned);
+  if (cleaned.length <= 180) return cleaned;
+  return extension
+    ? `${cleaned.slice(0, 180 - extension.length)}${extension}`
+    : cleaned.slice(0, 180);
+};
+
+const cleanupR2Uploads = async (fileKeys: string[]): Promise<void> => {
+  const results = await Promise.allSettled(fileKeys.map((fileKey) => deleteFromR2(fileKey)));
+  if (results.some((result) => result.status === 'rejected')) {
+    logger.error('Failed to clean up some R2 objects after challenge submission failed.');
+  }
+};
 
 /**
  * @desc    Get all approved & active challenges (with isSolved for the user)
@@ -66,6 +121,35 @@ export const getChallengeById = asyncHandler(async (req: Request, res: Response)
       completedAt: solved?.timestamp ?? null,
     })
   );
+});
+
+/**
+ * @desc    Redirect to a short-lived private challenge attachment URL
+ * @route   GET /api/v1/challenges/:id/attachments/:attachmentId/download
+ * @access  Private
+ */
+export const downloadAttachment = asyncHandler(async (req: Request, res: Response) => {
+  const challenge = await Challenge.findById(req.params.id);
+  if (!challenge) throw ApiError.notFound('Challenge not found');
+
+  const isOwner = challenge.createdBy.toString() === req.user!._id;
+  if (challenge.status !== 'approved' && !isOwner && req.user!.role !== 'admin') {
+    throw ApiError.forbidden('Only the challenge owner or an admin can download these files');
+  }
+
+  const attachment = challenge.attachments.find((entry) =>
+    typeof entry !== 'string' && entry._id?.toString() === req.params.attachmentId && !!entry.fileKey,
+  );
+  if (!attachment || typeof attachment === 'string') {
+    throw ApiError.notFound('Challenge attachment not found');
+  }
+
+  const signedUrl = await getSignedDownloadUrl(
+    attachment.fileKey,
+    attachment.originalName,
+    attachment.contentType,
+  );
+  res.redirect(302, signedUrl);
 });
 
 /**
@@ -281,7 +365,11 @@ export const getRecentSolvers = asyncHandler(async (req: Request, res: Response)
  * @access  Private
  */
 export const createChallenge = asyncHandler(async (req: Request, res: Response) => {
-  const { title, description, category, difficulty, flag, flags, hints, attachments } = req.body;
+  const { title, description, category, difficulty, flag } = req.body;
+  const hints = parseArrayField(req.body.hints, 'Hints');
+  const flags = parseArrayField(req.body.flags, 'Flags') as Array<{ sequence: number; value: string }> | undefined;
+  const attachments = parseArrayField(req.body.attachments, 'Attachments');
+  const uploadedFiles = Array.isArray(req.files) ? req.files : [];
 
   // Validate required fields
   if (
@@ -299,9 +387,12 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
     throw ApiError.badRequest('Invalid challenge category or difficulty');
   }
 
-  if ((hints !== undefined && (!Array.isArray(hints) || hints.length > 20)) ||
-      (attachments !== undefined && (!Array.isArray(attachments) || attachments.length > 10))) {
+  if ((hints !== undefined && hints.length > 20) ||
+      (attachments !== undefined && attachments.length > 10)) {
     throw ApiError.badRequest('A challenge can have at most 20 hints and 10 attachments');
+  }
+  if (uploadedFiles.length > MAX_CHALLENGE_FILES) {
+    throw ApiError.badRequest(`A challenge can have at most ${MAX_CHALLENGE_FILES} uploaded files`);
   }
 
   const hasSingleFlag = typeof flag === 'string' && flag.trim().length > 0;
@@ -379,6 +470,9 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
         return attachment.trim();
       }).filter(Boolean)
     : [];
+  if (parsedAttachments.length + uploadedFiles.length > 10) {
+    throw ApiError.badRequest('A challenge can have at most 10 attachments');
+  }
 
   const isAdminSubmission = req.user?.role === 'admin';
 
@@ -407,7 +501,36 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
     }));
   }
 
-  const challenge = await Challenge.create(challengeData);
+  const uploadedKeys: string[] = [];
+  let challenge: IChallengeDocument;
+  try {
+    const uploadedAttachments: IChallengeAttachment[] = [];
+
+    for (const file of uploadedFiles) {
+      const originalName = cleanOriginalFileName(file.originalname) || 'challenge-file';
+      const extension = extname(originalName).toLowerCase();
+      const fileKey = `challenges/${randomUUID()}/${randomUUID()}${extension}`;
+      const contentType = CHALLENGE_FILE_CONTENT_TYPES[extension];
+      const sha256 = await getFileSha256(file.path);
+
+      await uploadToR2(fileKey, file.path, contentType, file.size);
+      uploadedKeys.push(fileKey);
+      uploadedAttachments.push({
+        _id: randomUUID(),
+        fileKey,
+        originalName,
+        size: file.size,
+        sha256,
+        contentType,
+      });
+    }
+
+    challengeData.attachments = [...parsedAttachments, ...uploadedAttachments];
+    challenge = await Challenge.create(challengeData);
+  } catch (error) {
+    await cleanupR2Uploads(uploadedKeys);
+    throw error;
+  }
 
   if (!isAdminSubmission) {
     // Create notification for user about submission
