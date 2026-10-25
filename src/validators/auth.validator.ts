@@ -28,7 +28,7 @@ export const registerSchema = z.object({
  * ── Login Schema ──────────────────────────────────────────────────
  */
 export const loginSchema = z.object({
-  username: z.string().trim().toLowerCase().min(1, 'Username or email is required').max(254),
+  username: z.string().trim().toLowerCase().min(1, 'Username or email is required').max(254).refine(value => value.includes('@') ? z.string().email().safeParse(value).success : /^[a-zA-Z0-9_-]{3,30}$/.test(value), 'Enter a valid username or email address'),
   password: z.string().min(1, 'Password is required').max(256),
 });
 

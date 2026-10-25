@@ -1,16 +1,18 @@
 import { Router } from 'express';
 import * as authController from '../controllers/auth.controller';
 import { protect } from '../middleware/auth.middleware';
-import { checkForSQLInjection, getSQLInjectionResponse } from '../utils/sqlInjectionDetector';
+import { detectAuthPayload, authPayloadMessage } from '../utils/authInputFeedback';
 
 const router = Router();
 // Before schema validation, so obvious payloads receive the friendly response.
 // Passwords are opaque secrets: punctuation and SQL-like words remain valid.
 router.use(['/register', '/login'], (req, res, next) => {
-  if (checkForSQLInjection(req.body).detected) {
-    const result = getSQLInjectionResponse();
-    res.status(result.statusCode).json({ success: false, message: result.message, data: { isSQLInjection: true } });
-    return;
+  for (const field of ['username', 'email'] as const) {
+    const kind = detectAuthPayload(req.body?.[field]);
+    if (kind) {
+      res.status(400).json({ success: false, message: authPayloadMessage(kind), data: { isSQLInjection: kind === 'sql', isXSS: kind === 'xss', payloadType: kind } });
+      return;
+    }
   }
   next();
 });

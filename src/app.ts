@@ -13,6 +13,7 @@ import { isOriginAllowed } from './utils/cors'
 import { protect } from './middleware/auth.middleware'
 import { errorHandler } from './middleware/error.middleware'
 import { verifyRequestOrigin } from './middleware/csrf.middleware'
+import { preserveTypedCredentials } from './middleware/typedCredentials.middleware'
 
 // ── Route imports (added as they are built) ──────────────────────
 import authRoutes from './routes/auth.routes'
@@ -87,8 +88,8 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }))
 app.use(cookieParser())
 
 // Run input sanitizers after parsers so req.body and req.query are populated.
-app.use(mongoSanitize())
-app.use(xss())
+app.use(preserveTypedCredentials(mongoSanitize(), apiPrefix))
+app.use(preserveTypedCredentials(xss(), apiPrefix))
 app.use(hpp())
 
 // ── HTTP logger ───────────────────────────────────────────────────
