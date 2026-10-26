@@ -17,7 +17,7 @@ export const getLeaderboard = asyncHandler(async (req: Request, res: Response) =
 
   if (filter === 'all-time') {
     // Top users by their total score in User model
-    leaderboard = await User.find({})
+    leaderboard = await User.find({ role: 'user', isBanned: false })
       .sort({ score: -1, updatedAt: 1 })
       .limit(50)
       .select('username avatar score country');
@@ -61,8 +61,6 @@ export const getLeaderboard = asyncHandler(async (req: Request, res: Response) =
           lastSolveAt: { $max: '$timestamp' }
         }
       },
-      { $sort: { score: -1, lastSolveAt: 1 } },
-      { $limit: 50 },
       {
         $lookup: {
           from: 'users',
@@ -72,6 +70,9 @@ export const getLeaderboard = asyncHandler(async (req: Request, res: Response) =
         }
       },
       { $unwind: '$userDetails' },
+      { $match: { 'userDetails.role': 'user', 'userDetails.isBanned': false } },
+      { $sort: { score: -1, lastSolveAt: 1 } },
+      { $limit: 50 },
       {
         $project: {
           _id: 0,

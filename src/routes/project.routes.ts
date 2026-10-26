@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as projectController from '../controllers/project.controller';
-import { protect, restrictTo } from '../middleware/auth.middleware';
+import { protect, requirePermission } from '../middleware/auth.middleware';
 
 const router = Router();
 
@@ -10,7 +10,7 @@ router.get('/:id', projectController.getProjectById);
 
 // Protected routes for admins
 router.use(protect);
-router.use(restrictTo('admin'));
+router.use(requirePermission('projects'));
 
 router.post('/', projectController.createProject);
 router.put('/:id', projectController.updateProject);

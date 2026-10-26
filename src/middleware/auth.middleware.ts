@@ -3,10 +3,11 @@ import jwt from 'jsonwebtoken'
 import { ApiError } from '../utils/ApiError'
 import { env } from '../config/env'
 import { User } from '../models/User'
+import { hasPermission, isStaff, type Role, type Permission } from '../utils/roles'
 
 export interface JwtPayload {
   userId: string
-  role: 'user' | 'admin'
+  role: Role
   iat: number
   exp: number
   sessionVersion?: number
@@ -18,7 +19,7 @@ declare global {
     interface Request {
       user?: {
         _id: string
-        role: 'user' | 'admin'
+        role: Role
       }
     }
   }
@@ -88,10 +89,19 @@ export const protect = async (
  * Restricts access to specified roles.
  * Must be used AFTER `protect`.
  */
-export const restrictTo = (...roles: Array<'user' | 'admin'>) =>
+export const restrictTo = (...roles: Array<Role>) =>
   (_req: Request, __res: Response, next: NextFunction): void => {
     if (!_req.user || !roles.includes(_req.user.role)) {
       return next(ApiError.forbidden('You do not have permission to perform this action'))
     }
     next()
   }
+
+export const requireStaff = (req: Request, _res: Response, next: NextFunction): void => {
+  if (!isStaff(req.user?.role)) return next(ApiError.forbidden('Staff access required'));
+  next();
+};
+export const requirePermission = (permission: Permission) => (req: Request, _res: Response, next: NextFunction): void => {
+  if (!hasPermission(req.user?.role, permission)) return next(ApiError.forbidden('Your role does not have permission for this action'));
+  next();
+};

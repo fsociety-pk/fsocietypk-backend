@@ -24,7 +24,7 @@ export const getProfile = asyncHandler(async (req: Request, res: Response) => {
 
   // 2. Calculate Rank
   // Rank is 1 + number of users with a strictly higher score
-  const rank = await User.countDocuments({ score: { $gt: user.score } }) + 1;
+  const rank = await User.countDocuments({ role: 'user', isBanned: false, score: { $gt: user.score } }) + 1;
 
   // 3. Fetch recent solve history (from Submissions)
   const progress = await getUserChallengeProgress(userId);
@@ -50,7 +50,7 @@ export const getPublicProfile = asyncHandler(async (req: Request, res: Response)
   const { username } = req.params;
 
   // 1. Fetch user by username
-  const user = await User.findOne({ username: username.toLowerCase() });
+  const user = await User.findOne({ username: username.toLowerCase(), role: 'user', isBanned: false });
 
   if (!user) {
     throw ApiError.notFound('User not found');
@@ -62,7 +62,7 @@ export const getPublicProfile = asyncHandler(async (req: Request, res: Response)
   }
 
   // 3. Calculate Rank
-  const rank = await User.countDocuments({ score: { $gt: user.score } }) + 1;
+  const rank = await User.countDocuments({ role: 'user', isBanned: false, score: { $gt: user.score } }) + 1;
 
   // 4. Fetch recent solve history (from Submissions)
   const progress = await getUserChallengeProgress(user._id);
@@ -135,7 +135,7 @@ export const updateProfile = asyncHandler(async (req: Request, res: Response) =>
   const updatedUser = await User.findById(userId);
 
   // 5. Calculate Rank
-  const rank = await User.countDocuments({ score: { $gt: updatedUser!.score } }) + 1;
+  const rank = await User.countDocuments({ role: 'user', isBanned: false, score: { $gt: updatedUser!.score } }) + 1;
 
   // 6. Fetch recent solve history
   const progress = await getUserChallengeProgress(userId);

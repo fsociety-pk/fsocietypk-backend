@@ -1,20 +1,10 @@
-import { Router, Request, Response, NextFunction } from 'express';
-import { protect } from '../middleware/auth.middleware';
+import { Router } from 'express';
+import { protect, requirePermission, restrictTo } from '../middleware/auth.middleware';
 import * as writeupController from '../controllers/writeup.controller';
 
 const router = Router();
 
-// Middleware to check if user is admin
-const requireAdmin = (req: Request, res: Response, next: NextFunction): void => {
-  if (req.user?.role !== 'admin') {
-    res.status(403).json({
-      success: false,
-      message: 'Admin access required',
-    });
-    return;
-  }
-  next();
-};
+const requireAdmin = requirePermission('reviews');
 
 // ── Public Routes ──────────────────────────────────────────────
 /** Get all approved writeups for a challenge */
@@ -25,7 +15,7 @@ router.get('/:id', writeupController.getWriteupById);
 
 // ── Private Routes (Authenticated Users) ──────────────────────
 /** Submit a new writeup */
-router.post('/', protect, writeupController.submitWriteup);
+router.post('/', protect, restrictTo('user'), writeupController.submitWriteup);
 
 /** Get user's writeups */
 router.get('/user/me', protect, writeupController.getUserWriteups);

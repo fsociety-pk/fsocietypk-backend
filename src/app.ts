@@ -75,6 +75,7 @@ app.use(globalLimiter)
 
 // ── Auth-specific rate limiting ───────────────────────────────────
 const authLimiter = rateLimit({
+  skip: req => req.method === 'GET' && req.path === '/username-availability',
   windowMs: 15 * 60 * 1000, // 15 minutes
   max: 20, // limit each IP to 20 login/signup requests per window
   standardHeaders: true,

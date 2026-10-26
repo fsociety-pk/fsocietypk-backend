@@ -7,6 +7,8 @@ Object.assign(process.env, {
 });
 const { challengeUrlSchema } = require('../dist/schemas/challenge.schema');
 const { Challenge } = require('../dist/models/Challenge');
+const emailPublications = [];
+require('../dist/utils/platformEmail').enqueueChallengeEmail = async (...args) => { emailPublications.push(args); return 0; };
 const { createChallenge } = require('../dist/controllers/challenge.controller');
 const invoke = body => new Promise((resolve, reject) => createChallenge({
   body, files: [], user: { _id: '507f1f77bcf86cd799439011', role: 'admin' },
@@ -34,6 +36,7 @@ async function run() {
   assert.equal(created.challengeUrl, 'https://example.test/lab');
   assert.equal(created.attachments.length, 0);
   assert.equal(created.status, 'approved');
+  assert.equal(emailPublications[0][0], created._id.toString(), 'publishing queues member email for this challenge');
   await invoke(base);
   assert.equal(created.challengeUrl, undefined);
   for (const challengeUrl of ['javascript:alert(1)', {}, 'ftp://example.test']) {

@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import * as challengeController from '../controllers/challenge.controller';
-import { protect } from '../middleware/auth.middleware';
+import { protect, restrictTo } from '../middleware/auth.middleware';
 import { uploadChallengeAttachments } from '../middleware/challengeUpload.middleware';
 import rateLimit from 'express-rate-limit';
 
@@ -15,7 +15,7 @@ const flagSubmissionLimiter = rateLimit({
   message: { success: false, message: 'Too many flag attempts. Please try again later.' },
 });
 
-router.post('/submit', flagSubmissionLimiter, protect, challengeController.submitFlag);
+router.post('/submit', flagSubmissionLimiter, protect, restrictTo('user'), challengeController.submitFlag);
 
 // ── All remaining challenge routes require authentication ─────────
 router.use(protect);

@@ -38,7 +38,7 @@ export const getAnalytics = asyncHandler(async (_req: Request, res: Response) =>
   ] = await Promise.all([
     // 1. Overview
     Promise.all([
-      User.countDocuments(),
+      User.countDocuments({ role: 'user' }),
       Challenge.countDocuments({ status: 'approved' }),
       Submission.aggregate([
         ...challengeProgressPipeline(),
@@ -53,7 +53,7 @@ export const getAnalytics = asyncHandler(async (_req: Request, res: Response) =>
 
     // 2. User Growth (last 30 days)
     User.aggregate([
-      { $match: { createdAt: { $gte: thirtyDaysAgo } } },
+      { $match: { role: 'user', createdAt: { $gte: thirtyDaysAgo } } },
       {
         $group: {
           _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },

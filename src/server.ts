@@ -6,6 +6,7 @@ import logger from './utils/logger'
 import { initSocket } from './socket'
 import { verifyChallengeEmailTransport } from './utils/emailHelper'
 import { verifyR2Connection } from './lib/r2'
+import { startEmailWorker } from './utils/platformEmail'
 
 const PORT = env.PORT
 const HOST = env.HOST
@@ -35,6 +36,7 @@ const startServer = async () => {
 
     // Connect to MongoDB
     await connectDB()
+    const stopEmailWorker = startEmailWorker()
 
     // Start HTTP server
     const server = app.listen(PORT, HOST, () => {
@@ -64,9 +66,10 @@ const startServer = async () => {
     const shutdown = (signal: string) => {
       if (shuttingDown) return
       shuttingDown = true
+      const mailStopped = stopEmailWorker()
       logger.warn(`${signal} received — shutting down gracefully...`)
       server.close(() => {
-        void disconnectDB().finally(() => {
+        void mailStopped.then(() => disconnectDB()).finally(() => {
           logger.info('Shutdown complete.')
           process.exit(0)
         })

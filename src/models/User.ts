@@ -50,7 +50,7 @@ const userSchema = new Schema<IUserDocument>(
     sessionVersion: { type: Number, default: 0, select: false },
     role: {
       type: String,
-      enum: ['user', 'admin'],
+      enum: ['user', 'admin', 'manager', 'moderator', 'editor', 'analyst'],
       default: 'user',
     },
     avatar: {

@@ -3,7 +3,7 @@ import { env } from '../config/env';
 import { User } from '../models/User';
 import logger from './logger';
 
-const emailIsConfigured = Boolean(
+export const emailIsConfigured = Boolean(
   env.SMTP_HOST &&
   env.SMTP_USER &&
   env.SMTP_PASSWORD
@@ -23,6 +23,11 @@ const transporter = emailIsConfigured
       },
     })
   : null;
+
+export const sendPlatformEmail = async (to: string, subject: string, text: string): Promise<void> => {
+  if (!transporter || !env.SMTP_USER) throw new Error('SMTP is not configured');
+  await transporter.sendMail({ from: `Fsociety PK <${env.SMTP_USER}>`, to, subject, text });
+};
 
 const getSafeMailError = (error: unknown): { code?: string; responseCode?: number; message: string } => {
   const mailError = error as { code?: unknown; responseCode?: unknown; message?: unknown } | null;

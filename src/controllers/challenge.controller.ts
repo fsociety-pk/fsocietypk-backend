@@ -1,3 +1,5 @@
+import { hasPermission, isStaff, ROLES } from '../utils/roles';
+import { enqueueChallengeEmail } from '../utils/platformEmail';
 import { Request, Response } from 'express';
 import { createHash, randomUUID } from 'crypto';
 import { createReadStream } from 'fs';
@@ -137,7 +139,7 @@ export const downloadAttachment = asyncHandler(async (req: Request, res: Respons
   if (!challenge) throw ApiError.notFound('Challenge not found');
 
   const isOwner = challenge.createdBy.toString() === req.user!._id;
-  if (challenge.status !== 'approved' && !isOwner && req.user!.role !== 'admin') {
+  if (challenge.status !== 'approved' && !isOwner && !hasPermission(req.user!.role, 'challenges.read')) {
     throw ApiError.forbidden('Only the challenge owner or an admin can download these files');
   }
 
@@ -363,6 +365,7 @@ export const getRecentSolvers = asyncHandler(async (req: Request, res: Response)
  * @access  Private
  */
 export const createChallenge = asyncHandler(async (req: Request, res: Response) => {
+  if (isStaff(req.user?.role) && !hasPermission(req.user?.role, 'challenges.write')) throw ApiError.forbidden('Challenge publishing permission required');
   const { title, description, category, difficulty, flag } = req.body;
   const challengeUrl = challengeUrlSchema.safeParse(req.body.challengeUrl);
   if (!challengeUrl.success) {
@@ -476,7 +479,7 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
     throw ApiError.badRequest('A challenge can have at most 10 attachments');
   }
 
-  const isAdminSubmission = req.user?.role === 'admin';
+  const isAdminSubmission = hasPermission(req.user?.role, 'challenges.write');
 
   const challengeData: any = {
     title: title.trim(),
@@ -535,6 +538,11 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
     throw error;
   }
 
+  let emailsQueued = false;
+  if (isAdminSubmission) {
+    try { await enqueueChallengeEmail(challenge._id.toString(), challenge.title, challenge.description); emailsQueued = true; }
+    catch { logger.error('Challenge created, but member email queueing failed. Republish to retry.'); }
+  }
   if (!isAdminSubmission) {
     // Create notification for user about submission
     await createNotification({
@@ -547,7 +555,7 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
     });
 
     // Notify all active admins so submissions are visible in the admin panel notification center.
-    const admins = await User.find({ role: 'admin', isBanned: false }).select('_id');
+    const admins = await User.find({ role: { $in: ROLES.filter(role => hasPermission(role, 'challenges.review')) }, isBanned: false }).select('_id');
     const submitter = await User.findById(req.user!._id).select('username');
     const submitterUsername = submitter?.username || 'A user';
     const adminTemplate = notificationTemplates.challengeSubmissionNotification(submitterUsername, challenge.title);
@@ -590,6 +598,7 @@ export const createChallenge = asyncHandler(async (req: Request, res: Response) 
       isActive: challenge.isActive,
       difficulty: challenge.difficulty,
       points: challenge.points,
+      ...(isAdminSubmission ? { emailsQueued } : {}),
       }
     )
   );

@@ -1,3 +1,4 @@
+import { hasPermission } from '../utils/roles';
 import { Request, Response } from 'express';
 import { Writeup } from '../models/Writeup';
 import { Challenge } from '../models/Challenge';
@@ -227,7 +228,7 @@ export const deleteWriteup = asyncHandler(async (req: Request, res: Response) =>
   }
 
   // Only author or admin can delete
-  if (writeup.userId.toString() !== userId.toString() && userRole !== 'admin') {
+  if (writeup.userId.toString() !== userId.toString() && !hasPermission(userRole, 'reviews')) {
     throw ApiError.forbidden('You can only delete your own writeups');
   }
 
@@ -282,10 +283,6 @@ export const approveWriteup = asyncHandler(async (req: Request, res: Response) =
     throw ApiError.notFound('Writeup not found');
   }
 
-  if (writeup.status !== 'pending') {
-    throw ApiError.badRequest('Only pending writeups can be approved');
-  }
-
   writeup.status = 'approved';
   writeup.adminNotes = '';
   await writeup.save();
@@ -313,10 +310,7 @@ export const rejectWriteup = asyncHandler(async (req: Request, res: Response) =>
     throw ApiError.notFound('Writeup not found');
   }
 
-  if (writeup.status !== 'pending') {
-    throw ApiError.badRequest('Only pending writeups can be rejected');
-  }
-
+  if (adminNotes !== undefined && (typeof adminNotes !== 'string' || adminNotes.length > 2000)) throw ApiError.badRequest('Feedback must be text under 2000 characters');
   writeup.status = 'rejected';
   writeup.adminNotes = adminNotes || 'Rejected by admin';
   await writeup.save();

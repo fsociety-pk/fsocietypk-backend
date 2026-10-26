@@ -1,10 +1,11 @@
+import type { Role } from '../utils/roles';
 import mongoose, { Schema, Document } from 'mongoose';
 
 export interface IAnnouncement extends Document {
   adminId: mongoose.Types.ObjectId;
   title: string;
   message: string;
-  targetRole?: 'all' | 'user' | 'admin';
+  targetRole?: 'all' | 'staff' | Role;
   isActive: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -29,7 +30,7 @@ const announcementSchema = new Schema<IAnnouncement>(
     },
     targetRole: {
       type: String,
-      enum: ['all', 'user', 'admin'],
+      enum: ['all', 'staff', 'user', 'admin', 'manager', 'moderator', 'editor', 'analyst'],
       default: 'all',
     },
     isActive: {

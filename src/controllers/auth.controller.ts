@@ -63,6 +63,16 @@ const OTP_COOLDOWN = 60 * 1000;
 const codeDigest = (id: string, code: string) => createHmac('sha256', env.JWT_SECRET).update(`${id}:${code}`).digest('hex');
 const makeCode = () => randomInt(0, 1_000_000).toString().padStart(6, '0');
 
+/** Public, read-only signup feedback; the unique user index remains authoritative. */
+export const usernameAvailability = asyncHandler(async (req: Request, res: Response) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const parsed = registerSchema.shape.username.safeParse(req.query.username);
+  if (!parsed.success) throw ApiError.badRequest('Enter a valid username.', parsed.error.issues);
+  const username = parsed.data;
+  const exists = await User.exists({ username });
+  res.status(200).json(ApiResponse.ok('Username checked.', { username, available: !exists }));
+});
+
 export const register = asyncHandler(async (req: Request, res: Response) => {
   const result = registerSchema.safeParse(req.body);
   if (!result.success) throw ApiError.badRequest('Check your email, username and password.', result.error.issues);
