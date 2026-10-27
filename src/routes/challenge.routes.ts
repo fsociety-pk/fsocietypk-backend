@@ -23,6 +23,7 @@ router.use(protect);
 // ── User routes ───────────────────────────────────────────────────
 router.get('/my-submissions', challengeController.mySubmissions);
 router.get('/', challengeController.getChallenges);
+router.get('/activity/recent', challengeController.getRecentActivity);
 router.get('/:id', challengeController.getChallengeById);
 router.get('/:id/solvers', challengeController.getRecentSolvers);
 router.get('/:id/attachments/:attachmentId/download', challengeController.downloadAttachment);

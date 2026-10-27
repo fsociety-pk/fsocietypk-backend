@@ -8,10 +8,14 @@ const requireAdmin = requirePermission('reviews');
 
 // ── Public Routes ──────────────────────────────────────────────
 /** Get all approved writeups for a challenge */
+router.get('/', writeupController.getApprovedWriteups);
 router.get('/challenge/:challengeId', writeupController.getWriteupsForChallenge);
 
 /** Get a specific writeup by ID */
-router.get('/:id', writeupController.getWriteupById);
+router.get('/:id', (req, res, next) => {
+  if (req.cookies?.jwt || req.headers.authorization) return protect(req, res, next);
+  return next();
+}, writeupController.getWriteupById);
 
 // ── Private Routes (Authenticated Users) ──────────────────────
 /** Submit a new writeup */

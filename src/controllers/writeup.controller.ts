@@ -1,3 +1,4 @@
+import { emitWriteupsUpdate } from '../socket';
 import { hasPermission } from '../utils/roles';
 import { Request, Response } from 'express';
 import { Writeup } from '../models/Writeup';
@@ -7,6 +8,20 @@ import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
 import { sendSubmissionEmail } from '../utils/emailHelper';
+
+/** Community library: approved writeups only, with public author attribution. */
+export const getApprovedWriteups = asyncHandler(async (req: Request, res: Response) => {
+  const page = Math.max(1, parseInt(req.query.page as string, 10) || 1);
+  const limit = Math.min(50, Math.max(1, parseInt(req.query.limit as string, 10) || 10));
+  const filter = { status: 'approved' };
+  const [writeups, total] = await Promise.all([
+    Writeup.find(filter).select('-adminNotes')
+      .populate('userId', 'username avatar').populate('challengeId', 'title category difficulty points')
+      .sort({ updatedAt: -1, _id: -1 }).skip((page - 1) * limit).limit(limit),
+    Writeup.countDocuments(filter),
+  ]);
+  res.json(ApiResponse.ok('Community writeups retrieved', { writeups, pagination: { total, page, limit, pages: Math.ceil(total / limit) } }));
+});
 
 /**
  * @desc    Submit a new writeup for a challenge
@@ -126,6 +141,7 @@ export const getUserWriteups = asyncHandler(async (req: Request, res: Response) 
   const skip = (page - 1) * limit;
 
   const writeups = await Writeup.find({ userId })
+    .populate('userId', 'username avatar')
     .populate('challengeId', 'title category points')
     .sort({ createdAt: -1 })
     .skip(skip)
@@ -155,20 +171,23 @@ export const getWriteupById = asyncHandler(async (req: Request, res: Response) =
   const { id } = req.params;
 
   const writeup = await Writeup.findById(id).populate([
-    { path: 'userId', select: 'username avatar -_id' },
-    { path: 'challengeId', select: 'title category points difficulty -_id' },
+    { path: 'userId', select: 'username avatar' },
+    { path: 'challengeId', select: 'title category points difficulty' },
   ]);
 
   if (!writeup) {
     throw ApiError.notFound('Writeup not found');
   }
 
-  // Only show approved writeups or if user is the author
-  if (writeup.status !== 'approved' && writeup.userId.toString() !== req.user?._id.toString()) {
+  const authorId = (writeup.userId as unknown as { _id?: { toString(): string } })?._id?.toString();
+  const isAuthor = !!req.user && authorId === req.user._id.toString();
+  if (writeup.status !== 'approved' && !isAuthor && !hasPermission(req.user?.role, 'reviews')) {
     throw ApiError.forbidden('You do not have permission to view this writeup');
   }
 
-  res.status(200).json(ApiResponse.ok('Writeup retrieved successfully', writeup));
+  const publicWriteup = writeup.toObject();
+  if (writeup.status === 'approved' && !hasPermission(req.user?.role, 'reviews')) delete publicWriteup.adminNotes;
+  res.status(200).json(ApiResponse.ok('Writeup retrieved successfully', publicWriteup));
 });
 
 /**
@@ -233,6 +252,7 @@ export const deleteWriteup = asyncHandler(async (req: Request, res: Response) =>
   }
 
   await Writeup.findByIdAndDelete(id);
+  emitWriteupsUpdate();
 
   res.status(200).json(ApiResponse.ok('Writeup deleted successfully', null));
 });
@@ -286,6 +306,7 @@ export const approveWriteup = asyncHandler(async (req: Request, res: Response) =
   writeup.status = 'approved';
   writeup.adminNotes = '';
   await writeup.save();
+  emitWriteupsUpdate();
 
   const updatedWriteup = await writeup.populate([
     { path: 'userId', select: 'username avatar' },
@@ -314,6 +335,7 @@ export const rejectWriteup = asyncHandler(async (req: Request, res: Response) =>
   writeup.status = 'rejected';
   writeup.adminNotes = adminNotes || 'Rejected by admin';
   await writeup.save();
+  emitWriteupsUpdate();
 
   const updatedWriteup = await writeup.populate([
     { path: 'userId', select: 'username avatar' },

@@ -57,6 +57,10 @@ const writeupSchema = new Schema<IWriteupDocument>(
   }
 );
 
+// Public library and per-challenge approved availability queries.
+writeupSchema.index({ status: 1, updatedAt: -1, _id: -1 });
+writeupSchema.index({ challengeId: 1, status: 1 });
+
 // Ensure only one pending writeup per user per challenge
 writeupSchema.index({ userId: 1, challengeId: 1, status: 1 }, { unique: true });
 

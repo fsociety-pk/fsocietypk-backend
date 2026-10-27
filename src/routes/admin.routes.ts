@@ -49,6 +49,8 @@ router.patch('/users/:id/role', requirePermission('roles'), adminController.upda
 // Challenge Management (review queue)
 router.get('/challenges', requirePermission('challenges.read'), adminController.getChallenges);
 router.post('/challenges', requirePermission('challenges.write'), uploadChallengeAttachments, createChallenge);
+router.get('/challenges/:id/flags', requirePermission('challenges.read'), adminController.getChallengeFlags);
+router.put('/challenges/:id/flags', requirePermission('challenges.write'), adminController.restoreChallengeFlags);
 router.get('/challenges/:id', requirePermission('challenges.read'), adminController.getChallenge);
 router.patch('/challenges/:id', requirePermission('challenges.write'), adminController.updateChallenge);
 router.patch('/challenges/:id/status', requirePermission('challenges.review'), adminController.updateChallengeStatus);

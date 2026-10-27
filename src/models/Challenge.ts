@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import bcrypt from 'bcryptjs';
+import { encryptFlags } from '../utils/flagVault';
 import { IChallenge } from '../types';
 import { challengeUrlSchema } from '../schemas/challenge.schema';
 
@@ -7,6 +8,7 @@ export interface IChallengeDocument
   extends Omit<IChallenge, '_id' | 'createdAt' | 'updatedAt' | 'author' | 'createdBy'>,
     Document {
   createdBy: mongoose.Types.ObjectId;
+  encryptedFlagValues?: string;
   rejectionReason?: string | null;
   compareFlag(candidateFlag: string, sequenceNumber?: number): Promise<boolean>;
 }
@@ -59,6 +61,7 @@ const challengeSchema = new Schema<IChallengeDocument>(
       type: Number,
       min: [1, 'Points must be at least 1'],
     },
+    encryptedFlagValues: { type: String, select: false },
     flag: {
       type: String,
       required: false, // Deprecated: kept for backwards compatibility
@@ -127,8 +130,8 @@ const challengeSchema = new Schema<IChallengeDocument>(
   },
   {
     timestamps: true,
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true },
+    toJSON: { virtuals: true, transform: (_doc, ret) => { delete ret.encryptedFlagValues; return ret; } },
+    toObject: { virtuals: true, transform: (_doc, ret) => { delete ret.encryptedFlagValues; return ret; } },
   }
 );
 
@@ -162,6 +165,12 @@ challengeSchema.pre('save', function (next) {
 
 // Pre-save: hash flags with bcrypt if modified
 challengeSchema.pre('save', async function (next) {
+  // Preserve readable values encrypted before the comparison hashes replace them.
+  if (this.isModified('flags') && this.flags?.length && this.flags.every(flag => !flag.value.startsWith('$2'))) {
+    this.encryptedFlagValues = encryptFlags(this.flags.map(flag => ({ sequence: flag.sequence, value: flag.value.trim() })));
+  } else if (this.isModified('flag') && this.flag && !this.flag.startsWith('$2')) {
+    this.encryptedFlagValues = encryptFlags([{ sequence: 1, value: this.flag.trim() }]);
+  }
   // Handle legacy flag field
   if (this.isModified('flag') && this.flag) {
     if (!this.flag.startsWith('$2')) {

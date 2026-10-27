@@ -4,6 +4,7 @@ import { Request, Response } from 'express';
 import { createHash, randomUUID } from 'crypto';
 import { createReadStream } from 'fs';
 import { basename, extname } from 'path';
+import { Writeup } from '../models/Writeup';
 import { Challenge, IChallengeDocument } from '../models/Challenge';
 import { Submission } from '../models/Submission';
 import { User } from '../models/User';
@@ -82,13 +83,21 @@ export const getChallenges = asyncHandler(async (req: Request, res: Response) =>
     .populate('createdBy', 'username')
     .sort({ difficulty: 1, points: 1 });
 
-  const progress = await getUserChallengeProgress(req.user!._id);
+  const [progress, writeupCounts] = await Promise.all([
+    getUserChallengeProgress(req.user!._id),
+    Writeup.aggregate<{ _id: mongoose.Types.ObjectId; count: number }>([
+      { $match: { status: 'approved', challengeId: { $in: challenges.map(c => c._id) } } },
+      { $group: { _id: '$challengeId', count: { $sum: 1 } } },
+    ]),
+  ]);
+  const counts = new Map(writeupCounts.map(item => [item._id.toString(), item.count]));
   const progressById = new Map(progress.map(p => [p.challenge._id.toString(), p]));
   const challengesWithStatus = challenges.map(c => {
     const { flags, flag: _flag, ...publicChallenge } = c.toObject();
     const current = progressById.get(c._id.toString());
     return {
       ...publicChallenge,
+      writeupCount: counts.get(c._id.toString()) ?? 0,
       totalFlags: flags?.length || 1,
       completedFlags: current?.completedFlags ?? 0,
       completedSequences: current?.completedSequences.filter(n => n > 0) ?? [],
@@ -114,12 +123,16 @@ export const getChallengeById = asyncHandler(async (req: Request, res: Response)
     throw ApiError.notFound('Challenge not found');
   }
 
-  const [progress] = await getUserChallengeProgress(req.user!._id, req.params.id);
+  const [[progress], writeupCount] = await Promise.all([
+    getUserChallengeProgress(req.user!._id, req.params.id),
+    Writeup.countDocuments({ challengeId: challenge._id, status: 'approved' }),
+  ]);
   const { flags, flag: _flag, ...publicChallenge } = challenge.toObject();
 
   res.status(200).json(
     ApiResponse.ok('Challenge detail retrieved', {
       ...publicChallenge,
+      writeupCount,
       totalFlags: flags?.length || 1,
       completedFlags: progress?.completedFlags ?? 0,
       completedSequences: progress?.completedSequences.filter(n => n > 0) ?? [],
@@ -338,11 +351,21 @@ export const submitFlag = asyncHandler(async (req: Request, res: Response) => {
   return res.status(200).json(ApiResponse.ok('Incorrect Flag. Try again.', { correct: false }));
 });
 
-/**
- * @desc    Get recent solvers for a challenge
- * @route   GET /api/v1/challenges/:id/solvers
- * @access  Private
- */
+/** Timestamp-ordered, distinct full challenge completions for the dashboard. */
+export const getRecentActivity = asyncHandler(async (_req: Request, res: Response) => {
+  const activity = await Submission.aggregate([
+    ...challengeProgressPipeline(),
+    { $match: { isSolved: true, 'challenge.status': 'approved' } },
+    { $sort: { completedAt: -1, '_id.userId': 1, '_id.challengeId': 1 } },
+    { $lookup: { from: 'users', localField: '_id.userId', foreignField: '_id', pipeline: [{ $match: { isBanned: false, role: 'user' } }], as: 'user' } },
+    { $unwind: '$user' },
+    { $limit: 12 },
+    { $project: { _id: 0, id: { $concat: [{ $toString: '$_id.userId' }, ':', { $toString: '$_id.challengeId' }] }, username: '$user.username', avatar: '$user.avatar', challengeId: '$challenge._id', challengeTitle: '$challenge.title', points: '$pointsAwarded', timestamp: '$completedAt' } },
+  ]);
+  res.json(ApiResponse.ok('Recent community solves retrieved', activity));
+});
+
+/** Distinct full completions for a single challenge. */
 export const getRecentSolvers = asyncHandler(async (req: Request, res: Response) => {
   const { id } = req.params;
 

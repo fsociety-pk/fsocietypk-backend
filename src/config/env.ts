@@ -16,6 +16,9 @@ const envSchema = z.object({
   R2_SECRET_ACCESS_KEY: z.string().min(1, 'R2_SECRET_ACCESS_KEY is required'),
   R2_BUCKET: z.string().min(1, 'R2_BUCKET is required'),
 
+  // Optional stable secret for recoverable, administrator-only flag storage.
+  FLAG_ENCRYPTION_SECRET: z.string().min(32).optional(),
+
   // JWT
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('7d'),

@@ -1,3 +1,4 @@
+import { decryptFlags, encryptFlags } from '../utils/flagVault';
 import { Request, Response } from 'express';
 import { User } from '../models/User';
 import { Challenge } from '../models/Challenge';
@@ -306,4 +307,31 @@ export const updateRole = asyncHandler(async (req: Request, res: Response) => {
   const updated = await User.findOneAndUpdate({ _id: target._id, role: target.role, isBanned: target.isBanned }, { $set: { role: parsed.data.role }, $inc: { sessionVersion: 1 } }, { new: true, runValidators: true }).select('username role avatar isBanned createdAt');
   if (!updated) throw ApiError.conflict('The account changed. Refresh and try again.');
   res.json(ApiResponse.ok('Role updated. Existing sessions for this account have been revoked.', updated));
+});
+
+/** Readable flags are decrypted only through this explicitly protected endpoint. */
+export const getChallengeFlags = asyncHandler(async (req: Request, res: Response) => {
+  const challenge = await Challenge.findById(req.params.id).select('+encryptedFlagValues +flags');
+  if (!challenge) throw ApiError.notFound('Challenge not found');
+  const totalFlags = challenge.flags?.length || 1;
+  let flags;
+  try { flags = challenge.encryptedFlagValues ? decryptFlags(challenge.encryptedFlagValues) : null; }
+  catch { throw ApiError.conflict('Flag storage cannot be unlocked with the current encryption key. Restore the original key or re-enter the existing flags.'); }
+  res.json(ApiResponse.ok('Admin flags retrieved', { flags, totalFlags, recoverable: !!flags }));
+});
+
+/** Backfill legacy hashes by verifying supplied originals; solves and hashes stay intact. */
+export const restoreChallengeFlags = asyncHandler(async (req: Request, res: Response) => {
+  const flags = req.body.flags;
+  const challenge = await Challenge.findById(req.params.id).select('+flag +flags');
+  if (!challenge) throw ApiError.notFound('Challenge not found');
+  const ordered = [...(challenge.flags || [])].sort((a, b) => a.sequence - b.sequence);
+  if (!Array.isArray(flags) || flags.length !== (ordered.length || 1) || flags.some(value => typeof value !== 'string' || !value.trim() || value.length > 500)) {
+    throw ApiError.badRequest('Enter every existing flag in sequence, one per line');
+  }
+  const matches = await Promise.all(flags.map((value, index) => challenge.compareFlag(value, ordered.length ? ordered[index].sequence : undefined)));
+  if (matches.some(match => !match)) throw ApiError.badRequest('These values do not match the current challenge flags');
+  challenge.encryptedFlagValues = encryptFlags(flags.map((value, index) => ({ sequence: ordered[index]?.sequence || 1, value: value.trim() })));
+  await challenge.save();
+  res.json(ApiResponse.ok('Admin flag visibility restored', null));
 });

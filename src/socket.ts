@@ -41,6 +41,8 @@ export const getIO = () => {
   return io;
 };
 
+export const emitWriteupsUpdate = () => { if (io) io.emit('writeupsUpdate'); };
+
 export const emitLeaderboardUpdate = (data?: any) => {
   if (io) {
     io.emit('leaderboardUpdate', data);
