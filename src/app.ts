@@ -16,6 +16,7 @@ import { verifyRequestOrigin } from './middleware/csrf.middleware'
 import { preserveTypedCredentials } from './middleware/typedCredentials.middleware'
 
 // ── Route imports (added as they are built) ──────────────────────
+import supportRoutes from './routes/support.routes'
 import authRoutes from './routes/auth.routes'
 import challengeRoutes from './routes/challenge.routes'
 import userRoutes from './routes/user.routes'
@@ -125,6 +126,7 @@ app.get(apiPrefix, (_req: Request, res: Response) => {
 
 app.get(`${apiPrefix}/health`, healthHandler)
 
+app.use(`${apiPrefix}/support`, supportRoutes)
 app.use(`${apiPrefix}/auth`, authLimiter, authRoutes)
 app.use(`${apiPrefix}/challenges`, challengeRoutes)
 app.use(`${apiPrefix}/users`, userRoutes)

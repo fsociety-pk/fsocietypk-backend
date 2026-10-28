@@ -27,6 +27,7 @@ const route = (router, method, url, token, body = {}) => new Promise((resolve, r
 const invoke = (handler, req) => new Promise((resolve, reject) => handler(req, { status() { return this; }, json: resolve }, reject));
 async function run() {
   const endpoints = [
+    ['GET', '/support'], ['GET', `/support/${id}`], ['PATCH', `/support/${id}`],
     ['GET', '/stats'], ['GET', '/analytics'], ['GET', '/users'], ['PATCH', `/users/${id}/ban`],
     ['GET', '/challenges'], ['POST', '/challenges'], ['GET', `/challenges/${challengeId}`], ['PATCH', `/challenges/${challengeId}`],
     ['PATCH', `/challenges/${challengeId}/status`], ['PATCH', `/challenges/${challengeId}/live-status`], ['DELETE', `/challenges/${challengeId}`],

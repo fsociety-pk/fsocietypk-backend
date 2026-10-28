@@ -1,0 +1,13 @@
+import { Router } from 'express';
+import rateLimit from 'express-rate-limit';
+import { protect } from '../middleware/auth.middleware';
+import { createTicket, getTicket, listTickets, updateTicket } from '../controllers/support.controller';
+const router = Router();
+router.use(protect);
+router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
+const writes = rateLimit({ windowMs: 15 * 60 * 1000, limit: 20, keyGenerator: req => req.user!._id, standardHeaders: 'draft-7', legacyHeaders: false, message: { message: 'Too many support requests. Please try again in 15 minutes.' } });
+router.get('/', listTickets());
+router.post('/', writes, createTicket);
+router.get('/:id', getTicket());
+router.patch('/:id', writes, updateTicket());
+export default router;

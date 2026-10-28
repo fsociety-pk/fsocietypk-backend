@@ -48,6 +48,7 @@ const envSchema = z.object({
   SMTP_SECURE: z.enum(['true', 'false']).default('true').transform((value) => value === 'true'),
   SMTP_USER: z.string().optional(),
   SMTP_PASSWORD: z.string().optional(),
+  SUPPORT_NOTIFICATION_EMAIL: z.preprocess(value => value === '' ? undefined : value, z.string().email().optional()),
   CHALLENGE_NOTIFICATION_EMAIL: z.string().email().optional(), // Shared recipient for challenges, writeups, resources and projects
 
   // Logging

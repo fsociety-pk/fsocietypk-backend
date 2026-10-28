@@ -2,8 +2,8 @@
 export const ROLES = ['user', 'admin', 'manager', 'moderator', 'editor', 'analyst'] as const;
 export type Role = typeof ROLES[number];
 export type StaffRole = Exclude<Role, 'user'>;
-export type Permission = 'overview' | 'challenges.read' | 'challenges.write' | 'challenges.review' | 'reviews' | 'members' | 'projects' | 'analytics' | 'announcements' | 'roles' | 'system' | 'profile';
-const all: Permission[] = ['overview', 'challenges.read', 'challenges.write', 'challenges.review', 'reviews', 'members', 'projects', 'analytics', 'announcements', 'roles', 'system', 'profile'];
+export type Permission = 'overview' | 'challenges.read' | 'challenges.write' | 'challenges.review' | 'reviews' | 'members' | 'projects' | 'analytics' | 'announcements' | 'roles' | 'system' | 'profile' | 'support';
+const all: Permission[] = ['overview', 'challenges.read', 'challenges.write', 'challenges.review', 'reviews', 'members', 'projects', 'analytics', 'announcements', 'roles', 'system', 'profile', 'support'];
 export const ROLE_PERMISSIONS: Record<Role, readonly Permission[]> = {
   user: [], admin: all,
   manager: ['overview', 'challenges.read', 'challenges.write', 'challenges.review', 'reviews', 'members', 'projects', 'analytics', 'announcements'],

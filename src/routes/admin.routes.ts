@@ -11,6 +11,7 @@ import { adminIdSchema } from '../schemas/admin.schema';
 import { ApiError } from '../utils/ApiError';
 import * as systemController from '../controllers/admin.system.controller';
 
+import { listTickets, getTicket, updateTicket } from '../controllers/support.controller';
 const router = Router();
 
 // Secure all admin routes
@@ -21,6 +22,10 @@ router.param('id', (_req, _res, next, id) => {
   if (!adminIdSchema.safeParse(id).success) return next(ApiError.badRequest('Invalid administration record ID'));
   next();
 });
+
+router.get('/support', requirePermission('support'), listTickets(true));
+router.get('/support/:id', requirePermission('support'), getTicket(true));
+router.patch('/support/:id', requirePermission('support'), updateTicket(true));
 
 // System Stats & Analytics
 router.get('/stats', requirePermission('overview'), adminController.getStats);

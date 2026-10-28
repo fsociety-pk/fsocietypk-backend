@@ -1,3 +1,4 @@
+import { processSupportEmails } from './supportEmail';
 import { createHash, randomUUID } from 'crypto';
 import { User } from '../models/User';
 import { EmailJob } from '../models/EmailJob';
@@ -40,6 +41,8 @@ export const processEmailQueue = async (): Promise<void> => {
   if (processing || stopping || !emailIsConfigured) return;
   processing = true;
   try {
+    try { await processSupportEmails(); }
+    catch { logger.error('Support email processing failed. Tickets remain persisted for retry.'); }
     await EmailJob.updateMany({ status: 'sending', nextAttemptAt: { $lte: new Date() }, attempts: { $gte: 5 } }, { $set: { status: 'failed', lastError: 'Delivery interrupted after final attempt' } });
     for (let i = 0; i < 20 && !stopping; i++) {
       const leaseToken = randomUUID();
