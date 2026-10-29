@@ -52,6 +52,7 @@ matching its original SHA-256. The public API returned all nine entries. No imag
 bytes, database credentials or R2 credentials were added to either repository.
 
 Published file redirects explicitly allow cross-origin embedding; authenticated
-admin file redirects allow same-site embedding. The frontend also serves public
-file redirects through its HTTPS API proxy to support deployments that retain
-the earlier default Helmet resource policy.
+admin file redirects allow same-site embedding. Deploy the matching backend
+build to EC2 and restart its API process so these headers take effect. A
+same-origin frontend proxy was tested but rejected by Cloudflare's challenge
+page, so previews use the API directly with its corrected resource policy.
