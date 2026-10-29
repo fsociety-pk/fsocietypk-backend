@@ -17,6 +17,7 @@ import { preserveTypedCredentials } from './middleware/typedCredentials.middlewa
 
 // ── Route imports (added as they are built) ──────────────────────
 import supportRoutes from './routes/support.routes'
+import teamRoutes from './routes/team.routes'
 import authRoutes from './routes/auth.routes'
 import challengeRoutes from './routes/challenge.routes'
 import userRoutes from './routes/user.routes'
@@ -119,7 +120,7 @@ app.get(apiPrefix, (_req: Request, res: Response) => {
     success: true,
     message: 'FsocietyPK API root',
     baseUrl: apiPrefix,
-    modules: ['auth', 'challenges', 'users', 'admin', 'admin-profile', 'leaderboard', 'notifications', 'projects', 'writeups', 'resources'],
+    modules: ['auth', 'challenges', 'users', 'admin', 'admin-profile', 'leaderboard', 'notifications', 'projects', 'writeups', 'resources', 'team'],
     health: `${apiPrefix}/health`,
   })
 })
@@ -127,6 +128,7 @@ app.get(apiPrefix, (_req: Request, res: Response) => {
 app.get(`${apiPrefix}/health`, healthHandler)
 
 app.use(`${apiPrefix}/support`, supportRoutes)
+app.use(`${apiPrefix}/team`, teamRoutes)
 app.use(`${apiPrefix}/auth`, authLimiter, authRoutes)
 app.use(`${apiPrefix}/challenges`, challengeRoutes)
 app.use(`${apiPrefix}/users`, userRoutes)

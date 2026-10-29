@@ -65,6 +65,7 @@ export const getSignedDownloadUrl = async (
   fileKey: string,
   originalName: string,
   contentType: string,
+  disposition: 'attachment' | 'inline' = 'attachment',
 ): Promise<string> => {
   const safeName = originalName.replace(/[\r\n"]/g, '_')
   const fallbackName = safeName.replace(/[^A-Za-z0-9._ -]/g, '_').slice(0, 180) || 'download'
@@ -74,7 +75,7 @@ export const getSignedDownloadUrl = async (
   const command = new GetObjectCommand({
     Bucket: env.R2_BUCKET,
     Key: fileKey,
-    ResponseContentDisposition: `attachment; filename="${fallbackName}"; filename*=UTF-8''${encodedName}`,
+    ResponseContentDisposition: `${disposition}; filename="${fallbackName}"; filename*=UTF-8''${encodedName}`,
     ResponseContentType: contentType,
   })
 

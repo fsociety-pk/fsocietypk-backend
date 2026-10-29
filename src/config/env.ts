@@ -22,7 +22,6 @@ const envSchema = z.object({
   // JWT
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_EXPIRES_IN: z.string().default('7d'),
-  JWT_COOKIE_EXPIRES_IN: z.coerce.number().int().min(1).max(365).default(7),
   JWT_COOKIE_SAME_SITE: z.enum(['strict', 'lax', 'none']).default('lax'),
   JWT_COOKIE_SECURE: z.enum(['true', 'false']).optional().transform((value) => value === undefined ? undefined : value === 'true'),
 

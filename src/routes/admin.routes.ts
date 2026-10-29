@@ -10,6 +10,8 @@ import * as contentController from '../controllers/admin.content.controller';
 import { adminIdSchema } from '../schemas/admin.schema';
 import { ApiError } from '../utils/ApiError';
 import * as systemController from '../controllers/admin.system.controller';
+import * as teamController from '../controllers/team.controller';
+import { uploadTeamCertificate } from '../middleware/teamCertificateUpload.middleware';
 
 import { listTickets, getTicket, updateTicket } from '../controllers/support.controller';
 const router = Router();
@@ -24,6 +26,13 @@ router.param('id', (_req, _res, next, id) => {
 });
 
 router.get('/support', requirePermission('support'), listTickets(true));
+router.get('/team', requirePermission('team'), teamController.getTeamProfile(true));
+router.put('/team', requirePermission('team'), teamController.updateTeamProfile);
+router.get('/team/certificates', requirePermission('team'), teamController.listTeamCertificates(true));
+router.post('/team/certificates', requirePermission('team'), uploadTeamCertificate, teamController.createTeamCertificate);
+router.patch('/team/certificates/:id', requirePermission('team'), uploadTeamCertificate, teamController.updateTeamCertificate);
+router.delete('/team/certificates/:id', requirePermission('team'), teamController.deleteTeamCertificate);
+router.get('/team/certificates/:id/file', requirePermission('team'), teamController.getTeamCertificateFile(true));
 router.get('/support/:id', requirePermission('support'), getTicket(true));
 router.patch('/support/:id', requirePermission('support'), updateTicket(true));
 

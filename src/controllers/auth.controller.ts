@@ -14,14 +14,14 @@ import { registerSchema, loginSchema, verifyEmailSchema, resendOtpSchema } from 
 // ── Helpers ───────────────────────────────────────────────────────
 
 /**
- * Generates a JWT token and sets it in an HTTP-only cookie.
+ * Generates a JWT token and sets it in an HTTP-only browser-session cookie.
  */
 const cookieOptionsForResponse = () => {
   const secureCookie = env.JWT_COOKIE_SECURE ?? env.NODE_ENV === 'production';
 
   return {
     path: '/',
-    expires: new Date(Date.now() + env.JWT_COOKIE_EXPIRES_IN * 24 * 60 * 60 * 1000),
+    // No expires/maxAge: the browser should discard authentication when its session ends.
     httpOnly: true,
     secure: secureCookie,
     sameSite: env.JWT_COOKIE_SAME_SITE,
