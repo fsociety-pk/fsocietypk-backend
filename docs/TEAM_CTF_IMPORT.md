@@ -43,3 +43,15 @@ and ink reveal. Edit, replace, unpublish or remove entries at `/admin/team`.
 The local preview was checked with all nine original images and intercepted
 API/file responses. That does not upload files to R2. Publishing requires a
 configured backend environment or working admin/server access.
+
+## Import completed, October 29, 2026
+
+All nine supplied images were uploaded using the configured production R2 and
+MongoDB connection. The importer published nine records, with every R2 download
+matching its original SHA-256. The public API returned all nine entries. No image
+bytes, database credentials or R2 credentials were added to either repository.
+
+Published file redirects explicitly allow cross-origin embedding; authenticated
+admin file redirects allow same-site embedding. The frontend also serves public
+file redirects through its HTTPS API proxy to support deployments that retain
+the earlier default Helmet resource policy.

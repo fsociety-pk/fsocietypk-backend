@@ -145,9 +145,11 @@ async function run() {
     const publicFile = await invoke(controller.getTeamCertificateFile(), { params: { id } });
     assert.equal(fileFilter.isPublished, true); assert.equal(publicFile.status, 302); assert.equal(signed.at(-1)[3], 'inline');
     assert.equal(publicFile.headers['Cache-Control'], 'no-store');
+    assert.equal(publicFile.headers['Cross-Origin-Resource-Policy'], 'cross-origin', 'published previews can be embedded on the team subdomain');
     record.isPublished = false;
     await assert.rejects(invoke(controller.getTeamCertificateFile(), { params: { id } }), error => error.statusCode === 404);
-    await invoke(controller.getTeamCertificateFile(true), { params: { id }, query: { download: '1' } });
+    const adminFile = await invoke(controller.getTeamCertificateFile(true), { params: { id }, query: { download: '1' } });
+    assert.equal(adminFile.headers['Cross-Origin-Resource-Policy'], 'same-site', 'admin file redirects remain limited to the platform site');
     assert.equal(signed.at(-1)[3], 'attachment');
     TeamCertificate.findOneAndDelete = async filter => { assert.equal(filter.__v, 1); return record; };
     await invoke(controller.deleteTeamCertificate, { params: { id }, query: { version: '1' } });

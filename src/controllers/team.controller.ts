@@ -120,5 +120,6 @@ export const getTeamCertificateFile = (admin = false) => asyncHandler(async (req
   if (!record) throw ApiError.notFound('Certificate not found');
   const url = await getSignedDownloadUrl(record.file.fileKey, record.file.originalName, record.file.contentType, req.query.download === '1' ? 'attachment' : 'inline');
   res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('Cross-Origin-Resource-Policy', admin ? 'same-site' : 'cross-origin');
   res.redirect(302, url);
 });
