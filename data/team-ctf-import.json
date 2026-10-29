@@ -1,0 +1,47 @@
+[
+  {
+    "file": "madar-ctf.png",
+    "details": { "title": "Madar CTF 2026", "eventDate": "2026-10-17", "placement": "29th place", "description": "Team profile screenshot showing Fsociety with 1,965 points and 0 first bloods. The qualifying round ran October 17–18, 2026.", "eventUrl": "", "isPublished": true },
+    "sourceNote": "Name, event dates, points and rank are visible in the image."
+  },
+  {
+    "file": "brunner-ctf.webp",
+    "details": { "title": "BrunnerCTF 2026", "eventDate": "2026-08", "placement": "212th of 1,103 teams", "description": "Certificate of participation for Fsociety in BrunnerCTF 2026, with 3,095 points. Team roster: morani, sheriff, alimadco and Cyber_GrimeReaper.", "eventUrl": "", "isPublished": true },
+    "sourceNote": "The certificate gives August 2026, without an exact day."
+  },
+  {
+    "file": "kali-team-ctf.webp",
+    "details": { "title": "Kali Team CTF 26", "eventDate": "2026-08-05", "placement": "Participation", "description": "Certificate of participation awarded to sheriff, representing Fsociety, in the Kali Team CTF 26 cybersecurity competition.", "eventUrl": "", "isPublished": true },
+    "sourceNote": "The certificate names sheriff, Fsociety and August 5, 2026."
+  },
+  {
+    "file": "ramadan-ctf-2025.webp",
+    "details": { "title": "Ramadan CTF 2026", "eventDate": "2026", "placement": "1,730 points · 21 solves", "description": "Team statistics screenshot for Cyber Trio in Ramadan CTF 2026, showing 1,730 points, 21 challenges solved and 0 first bloods. Members shown: Husnain, Uxman and Hexmi.", "eventUrl": "", "isPublished": true },
+    "sourceNote": "The image says Ramadan CTF 2026 despite the 2025 filename. The March 16 timestamp is a last submission time, not the event date."
+  },
+  {
+    "file": "umass-ctf.webp",
+    "details": { "title": "UMassCTF 2026", "eventDate": "2026", "placement": "134th place", "description": "Team scoreboard screenshot showing Fsociety in 134th place with 2,124 points in UMassCTF 2026.", "eventUrl": "", "isPublished": true },
+    "sourceNote": "The screenshot identifies the year but not a month or day."
+  },
+  {
+    "file": "pico-ctf.webp",
+    "details": { "title": "picoCTF 2026", "eventDate": "2026", "placement": "8,600 points", "description": "Team progress screenshot for Cyber Trio in picoCTF 2026, showing a total team score of 8,600 points and progress across the challenge categories.", "eventUrl": "", "isPublished": true },
+    "sourceNote": "The screenshot identifies the year and the Cyber Trio team name. No placement is visible."
+  },
+  {
+    "file": "boro-ctf.webp",
+    "details": { "title": "boroCTF", "eventDate": "", "placement": "114th place · Open Division", "description": "Team profile screenshot showing Fsociety representing Pakistan in boroCTF's Open Division, with 10,600 points and 114th place.", "eventUrl": "", "isPublished": true },
+    "sourceNote": "No event year or date is visible."
+  },
+  {
+    "file": "secleaf-ctf.webp",
+    "details": { "title": "SecLeaf CTF", "eventDate": "", "placement": "205th place", "description": "Team profile screenshot showing Fsociety with 2,855 points, 19 captures and 4 active members.", "eventUrl": "", "isPublished": true },
+    "sourceNote": "Event name comes from the supplied filename. No event date is visible."
+  },
+  {
+    "file": "hack4bug-ctf.webp",
+    "details": { "title": "Hack4Bug CTF", "eventDate": "", "placement": "", "description": "Scoreboard capture from Hack4Bug CTF.", "eventUrl": "", "isPublished": true },
+    "sourceNote": "Event name comes from the supplied filename. The crop does not show Fsociety's row, so no team placement or points are claimed."
+  }
+]

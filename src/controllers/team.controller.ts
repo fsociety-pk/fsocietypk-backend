@@ -79,7 +79,7 @@ export const listTeamCertificates = (admin = false) => asyncHandler(async (req: 
     TeamCertificate.countDocuments(filter), TeamCertificate.distinct('eventYear', visibility),
   ]);
   res.setHeader('Cache-Control', 'no-store');
-  res.json(ApiResponse.ok('Team certificates retrieved', { certificates: items.map(item => certificateJson(item, admin)), years: years.sort((a, b) => b - a), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } }));
+  res.json(ApiResponse.ok('Team certificates retrieved', { certificates: items.map(item => certificateJson(item, admin)), years: years.filter((value): value is number => typeof value === 'number' && Number.isInteger(value)).sort((a, b) => b - a), pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } }));
 });
 
 export const createTeamCertificate = asyncHandler(async (req: Request, res: Response) => {
@@ -87,7 +87,7 @@ export const createTeamCertificate = asyncHandler(async (req: Request, res: Resp
   if (!req.file) throw ApiError.badRequest('Choose a certificate file');
   const file = await storeUpload(req.file);
   let record;
-  try { record = await TeamCertificate.create({ ...data, eventYear: Number(data.eventDate.slice(0, 4)), file }); }
+  try { record = await TeamCertificate.create({ ...data, eventYear: data.eventDate ? Number(data.eventDate.slice(0, 4)) : null, file }); }
   catch (error) { await removeR2File(file.fileKey); throw error; }
   res.status(201).json(ApiResponse.created('Certificate saved', certificateJson(record.toObject(), true)));
 });
@@ -100,7 +100,7 @@ export const updateTeamCertificate = asyncHandler(async (req: Request, res: Resp
   const replacement = req.file ? await storeUpload(req.file) : undefined;
   let record;
   try {
-    record = await TeamCertificate.findOneAndUpdate({ _id: id, __v: version }, { $set: { ...data, eventYear: Number(data.eventDate.slice(0, 4)), ...(replacement && { file: replacement }) }, $inc: { __v: 1 } }, { new: true, runValidators: true });
+    record = await TeamCertificate.findOneAndUpdate({ _id: id, __v: version }, { $set: { ...data, eventYear: data.eventDate ? Number(data.eventDate.slice(0, 4)) : null, ...(replacement && { file: replacement }) }, $inc: { __v: 1 } }, { new: true, runValidators: true });
     if (!record) throw ApiError.conflict('This certificate changed. Refresh before saving.');
   } catch (error) { if (replacement) await removeR2File(replacement.fileKey); throw error; }
   if (replacement) await removeR2File(previous.file.fileKey);

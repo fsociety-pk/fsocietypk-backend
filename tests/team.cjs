@@ -67,6 +67,10 @@ async function run() {
 
   assert(schemas.teamCertificateSchema.safeParse(metadata).success);
   for (const data of [{ ...metadata, eventDate: '2026-02-30' }, { ...metadata, eventUrl: 'javascript:alert(1)' }, { ...metadata, fileKey: 'challenges/private.zip' }, { ...metadata, isPublished: 'true' }]) assert(!schemas.teamCertificateSchema.safeParse(data).success);
+  for (const eventDate of ['', '2026', '2026-08', '2024-02-29']) assert(schemas.teamCertificateSchema.safeParse({ ...metadata, eventDate }).success, `preserves known precision: ${eventDate}`);
+  assert(schemas.teamCertificateSchema.safeParse({ ...metadata, eventUrl: '' }).success, 'missing optional event URL is accepted without a URL constructor exception');
+  for (const eventUrl of ['invalid', 'http://example.com', 'javascript:alert(1)']) assert(!schemas.teamCertificateSchema.safeParse({ ...metadata, eventUrl }).success, 'malformed event URL returns a validation result');
+  for (const eventDate of ['2026-02-29', '2026-00', '2026-13', '2026-04-31', '1999', '2201', '2026-1', '2026-01-01T00:00:00Z']) assert(!schemas.teamCertificateSchema.safeParse({ ...metadata, eventDate }).success, `rejects invalid partial date: ${eventDate}`);
   const profile = { ...defaultTeamProfile, version: 0 };
   assert(schemas.teamProfileSchema.safeParse(profile).success);
   assert(!schemas.teamProfileSchema.safeParse({ ...profile, socials: [{ label: 'Bad', detail: '', url: 'data:text/html,1', kind: 'website' }] }).success);
@@ -117,10 +121,21 @@ async function run() {
     await assert.rejects(multipart('test.png', png, 'unexpected'), error => error.statusCode === 400);
     console.log('PASS real multipart upload, 8 MB limit, rejected SVG/type mismatch, R2 namespace, replace cleanup and upload/DB/conflict rollback');
 
+    const savedRecord = record;
+    for (const eventDate of ['', '2026', '2026-08']) {
+      const imported = await invoke(controller.createTeamCertificate, { ...mutation({ ...metadata, eventDate, eventUrl: '' }), file: uploaded.req.file });
+      assert.equal(imported.status, 201);
+      assert.equal(record.eventDate, eventDate);
+      assert.equal(record.eventYear, eventDate ? 2026 : null);
+      assert.equal(record.validateSync(), undefined, 'Mongo model accepts the actual source date precision');
+    }
+    record = savedRecord;
+    console.log('PASS unknown/year/month event dates and absent event URLs survive controller creation and model validation');
+
     let listFilter, fileFilter;
     TeamCertificate.find = filter => { listFilter = filter; return { sort() { return this; }, skip() { return this; }, limit() { return this; }, lean: async () => [record.toObject()] }; };
     TeamCertificate.countDocuments = async () => 1;
-    TeamCertificate.distinct = async () => [2025, 2026];
+    TeamCertificate.distinct = async () => [2025, null, 2026];
     const listing = await invoke(controller.listTeamCertificates(), { query: { status: 'draft', year: '2026' } });
     assert.equal(listFilter.isPublished, true, 'public queries cannot request drafts');
     assert.equal(listFilter.eventYear, 2026);

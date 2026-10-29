@@ -5,8 +5,8 @@ const file = new Schema({
   contentType: { type: String, required: true }, size: { type: Number, required: true },
 }, { _id: false });
 const schema = new Schema({
-  title: { type: String, required: true }, eventDate: { type: String, required: true },
-  eventYear: { type: Number, required: true }, placement: { type: String, default: '' },
+  title: { type: String, required: true }, eventDate: { type: String, default: '' },
+  eventYear: { type: Number, default: null }, placement: { type: String, default: '' },
   description: { type: String, default: '' }, eventUrl: { type: String, default: '' },
   isPublished: { type: Boolean, default: false }, file: { type: file, required: true },
 }, { timestamps: true });
