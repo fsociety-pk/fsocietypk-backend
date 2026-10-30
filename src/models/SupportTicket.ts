@@ -7,7 +7,7 @@ const schema = new Schema({
   userId: { type: Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   subject: { type: String, required: true, maxlength: 140 },
   category: { type: String, enum: ['technical', 'account', 'challenge', 'feedback', 'other'], required: true },
-  status: { type: String, enum: ['open', 'in_progress', 'resolved'], default: 'open', required: true },
+  status: { type: String, enum: ['open', 'in_progress', 'resolved', 'closed'], default: 'open', required: true },
   messages: { type: [messageSchema], required: true },
   emailStatus: { type: String, enum: ['queued', 'sending', 'sent', 'failed'], default: 'queued', select: false },
   emailAttempts: { type: Number, default: 0, select: false },

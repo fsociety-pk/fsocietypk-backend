@@ -6,7 +6,8 @@ import { ApiError } from '../utils/ApiError';
 
 const body = z.string().trim().min(10).max(5000);
 export const ticketSchema = z.object({ subject: z.string().trim().min(5).max(140), category: z.enum(['technical', 'account', 'challenge', 'feedback', 'other']), message: body });
-const updateSchema = z.object({ message: z.string().trim().min(1).max(5000).optional(), status: z.enum(['open', 'in_progress', 'resolved']).optional() }).refine(value => value.message || value.status, 'Write a reply or choose a status');
+const ticketStatus = z.enum(['open', 'in_progress', 'resolved', 'closed']);
+const updateSchema = z.object({ message: z.string().trim().min(1).max(5000).optional(), status: ticketStatus.optional() }).refine(value => value.message || value.status, 'Write a reply or choose a status');
 const parse = <T>(schema: z.ZodType<T>, value: unknown): T => {
   const result = schema.safeParse(value);
   if (!result.success) throw ApiError.badRequest(result.error.issues[0].message);
@@ -23,7 +24,7 @@ export const createTicket = asyncHandler(async (req, res) => {
 });
 export const listTickets = (admin = false) => asyncHandler(async (req, res) => {
   const page = Math.max(1, Math.min(100000, Number(req.query.page) || 1));
-  const status = req.query.status === undefined || req.query.status === 'all' ? undefined : parse(z.enum(['open', 'in_progress', 'resolved']), req.query.status);
+  const status = req.query.status === undefined || req.query.status === 'all' ? undefined : parse(ticketStatus, req.query.status);
   const filter = { ...scope(req, admin), ...(status ? { status } : {}) };
   const [tickets, total] = await Promise.all([
     SupportTicket.find(filter).select('-messages').populate(populate).sort({ updatedAt: -1 }).skip((Math.floor(page) - 1) * 20).limit(20),
@@ -40,12 +41,18 @@ export const getTicket = (admin = false) => asyncHandler(async (req, res) => {
 export const updateTicket = (admin = false) => asyncHandler(async (req, res) => {
   parse(id, req.params.id);
   const input = parse(updateSchema, req.body);
-  if (!admin && input.status) throw ApiError.forbidden('Only the admin can change ticket status');
-  const filter = { _id: req.params.id, ...scope(req, admin), ...(!admin ? { status: { $ne: 'resolved' } } : {}), ...(input.message ? { 'messages.199': { $exists: false } } : {}) };
+  if (!admin && input.status && input.status !== 'closed') throw ApiError.forbidden('You can only close your own ticket');
+  if (admin && input.status === 'closed') throw ApiError.forbidden('Only the ticket owner can close the ticket');
+  // Owner-only closing is idempotent and also works on resolved/full tickets.
+  // Other writes atomically exclude closed tickets; members cannot reply to a
+  // resolved ticket or reopen one by submitting a different status.
+  const statusFilter = admin ? { status: { $ne: 'closed' } }
+    : input.status === 'closed' && !input.message ? {} : { status: { $nin: ['resolved', 'closed'] } };
+  const filter = { _id: req.params.id, ...scope(req, admin), ...statusFilter, ...(input.message ? { 'messages.199': { $exists: false } } : {}) };
   const ticket = await SupportTicket.findOneAndUpdate(filter, {
     ...(input.message ? { $push: { messages: { author: admin ? 'admin' : 'member', body: input.message } } } : {}),
     ...(input.status ? { $set: { status: input.status } } : {}),
   }, { new: true, runValidators: true }).populate(populate);
-  if (!ticket) throw ApiError.conflict('Ticket unavailable, resolved, or at its reply limit. Refresh and try again.');
+  if (!ticket) throw ApiError.conflict('Ticket unavailable, closed, resolved, or at its reply limit. Refresh and try again.');
   res.json(ApiResponse.ok('Ticket updated', ticket));
 });
