@@ -1,5 +1,6 @@
 import { Notification } from '../models/Notification';
 import mongoose from 'mongoose';
+import { emitNotificationCreated } from '../socket';
 
 export interface NotificationPayload {
   userId: mongoose.Types.ObjectId | string;
@@ -21,6 +22,7 @@ export const createNotification = async (payload: NotificationPayload) => {
       data: payload.data,
     });
 
+    emitNotificationCreated(notification);
     return notification;
   } catch (error) {
     console.error('Error creating notification:', error);

@@ -6,7 +6,7 @@ import { Announcement } from '../models/Announcement';
 import { ApiError } from '../utils/ApiError';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
-import { getIO } from '../socket';
+import { getIO, emitNotificationCreated } from '../socket';
 import { User } from '../models/User';
 import { Notification } from '../models/Notification';
 import { adminAnnouncementSchema, adminIdSchema } from '../schemas/admin.schema';
@@ -44,15 +44,16 @@ export const createAnnouncement = asyncHandler(async (req: Request, res: Respons
     userId: u._id,
     title: `Platform Announcement: ${title}`,
     message: message,
-    type: 'system',
+    type: 'system' as const,
     read: false
   }));
   if (notificationsToInsert.length > 0) {
-    await Notification.insertMany(notificationsToInsert);
+    const notifications = await Notification.insertMany(notificationsToInsert);
+    notifications.forEach(emitNotificationCreated);
   }
 
-  // Socket connections are currently public, so only broadcast announcements
-  // intended for everyone. Role-targeted items remain available via the API.
+  // This public event remains available anonymously. Targeted announcements
+  // use the recipient rooms above and the authenticated inbox API.
   if (announcement.targetRole === 'all') {
     getIO().emit('newAnnouncement', {
       _id: announcement._id,

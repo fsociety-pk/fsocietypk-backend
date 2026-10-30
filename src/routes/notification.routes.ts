@@ -6,6 +6,7 @@ const router = Router();
 
 // All routes require authentication
 router.use(protect);
+router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 
 // Get all notifications (with optional read filter)
 router.get('/', notificationController.getNotifications);

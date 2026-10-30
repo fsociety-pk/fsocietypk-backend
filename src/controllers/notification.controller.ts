@@ -2,6 +2,18 @@ import { Request, Response } from 'express';
 import { Notification } from '../models/Notification';
 import { ApiResponse } from '../utils/ApiResponse';
 import { asyncHandler } from '../utils/asyncHandler';
+import { ApiError } from '../utils/ApiError';
+import { emitNotificationsChanged } from '../socket';
+import { z } from 'zod';
+
+const notificationIdSchema = z.string().regex(/^[a-f0-9]{24}$/i);
+const readSchema = z.object({ read: z.boolean().optional().default(true) });
+const bulkSchema = z.object({ ids: z.array(notificationIdSchema).max(10000).optional() });
+const parse = <T>(schema: z.ZodType<T>, value: unknown): T => {
+  const result = schema.safeParse(value);
+  if (!result.success) throw ApiError.badRequest('Invalid notification request');
+  return result.data;
+};
 
 export const notificationController = {
   // Get all notifications for user
@@ -13,6 +25,7 @@ export const notificationController = {
         .json(new ApiResponse(401, 'Unauthorized', null));
     }
     const { read } = req.query;
+    if (read !== undefined && read !== 'true' && read !== 'false') throw ApiError.badRequest('Invalid read filter');
 
     const filter: any = { userId };
     if (read !== undefined) {
@@ -61,6 +74,8 @@ export const notificationController = {
   // Mark notification as read
   markAsRead: asyncHandler(async (req: Request, res: Response) => {
     const { notificationId } = req.params;
+    parse(notificationIdSchema, notificationId);
+    const { read } = parse(readSchema, req.body || {});
     const userId = req.user?._id;
     if (!userId) {
       return res
@@ -70,7 +85,7 @@ export const notificationController = {
 
     const notification = await Notification.findOneAndUpdate(
       { _id: notificationId, userId },
-      { read: true },
+      { $set: { read } },
       { new: true }
     );
 
@@ -80,12 +95,14 @@ export const notificationController = {
         .json(new ApiResponse(404, 'Notification not found', null));
     }
 
+    emitNotificationsChanged(userId);
+
     return res
       .status(200)
       .json(
         new ApiResponse(
           200,
-          'Notification marked as read',
+          read ? 'Notification marked as read' : 'Notification marked as unread',
           notification
         )
       );
@@ -100,10 +117,12 @@ export const notificationController = {
         .json(new ApiResponse(401, 'Unauthorized', null));
     }
 
+    const { ids } = parse(bulkSchema, req.body || {});
     await Notification.updateMany(
-      { userId, read: false },
-      { read: true }
+      { userId, read: false, ...(ids ? { _id: { $in: ids } } : {}) },
+      { $set: { read: true } }
     );
+    emitNotificationsChanged(userId);
 
     return res
       .status(200)
@@ -115,6 +134,7 @@ export const notificationController = {
   // Delete notification
   deleteNotification: asyncHandler(async (req: Request, res: Response) => {
     const { notificationId } = req.params;
+    parse(notificationIdSchema, notificationId);
     const userId = req.user?._id;
     if (!userId) {
       return res
@@ -133,6 +153,8 @@ export const notificationController = {
         .json(new ApiResponse(404, 'Notification not found', null));
     }
 
+    emitNotificationsChanged(userId);
+
     return res
       .status(200)
       .json(new ApiResponse(200, 'Notification deleted', null));
@@ -147,7 +169,9 @@ export const notificationController = {
         .json(new ApiResponse(401, 'Unauthorized', null));
     }
 
-    await Notification.deleteMany({ userId });
+    const { ids } = parse(bulkSchema, req.body || {});
+    await Notification.deleteMany({ userId, ...(ids ? { _id: { $in: ids } } : {}) });
+    emitNotificationsChanged(userId);
 
     return res
       .status(200)
