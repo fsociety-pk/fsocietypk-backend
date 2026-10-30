@@ -81,6 +81,18 @@ export const profileSolveData = (progress: ChallengeProgress[]) => {
     .sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
   return {
     solvedChallenges: completed.map(p => p.challenge),
+    // These awards are backed by persisted, distinct full completions. Derive
+    // the entire collection so existing solves receive badges automatically,
+    // including challenges outside the twenty-row recent-history window.
+    earnedBadges: completed.map(p => ({
+      id: `${p._id.userId}:${p.challenge._id}`,
+      challengeId: p.challenge._id.toString(),
+      title: p.challenge.title,
+      category: p.challenge.category,
+      difficulty: p.challenge.difficulty,
+      points: p.pointsAwarded,
+      earnedAt: p.completedAt ?? p.timestamp ?? null,
+    })),
     solveHistory: completed.slice(0, 20).map(p => ({
       _id: p.challenge._id,
       challengeId: p.challenge,
